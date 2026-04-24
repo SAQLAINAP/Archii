@@ -141,9 +141,9 @@ export default function LandingPage() {
     {
       icon: "📖",
       color: "#FFAA22",
-      title: "Vastu Glossary",
-      desc: "32 terms explained",
-      href: "/glossary",
+      title: "Design Beliefs",
+      desc: "Vastu · Islamic · Christian glossaries",
+      href: "/beliefs",
     },
     {
       icon: "✏️",
@@ -178,7 +178,7 @@ export default function LandingPage() {
         {[
           { href:'/app',      label:'Studio',       color:'#4488FF' },
           { href:'/presets',  label:'Presets',      color:'#44DD88' },
-          { href:'/glossary', label:'Glossary',     color:'#FFAA22' },
+          { href:'/beliefs', label:'Beliefs',     color:'#FFAA22' },
           { href:'/canvas',   label:'Canvas Check', color:'#CC66FF' },
         ].map(link => (
           <a key={link.href} href={link.href} style={{

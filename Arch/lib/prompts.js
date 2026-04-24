@@ -322,3 +322,94 @@ Respond ONLY as JSON (no markdown):
   "summary": "<friendly 1-2 sentence reply to user>"
 }`;
 }
+
+// ─── Belief-system context injected into floor-plan & critic prompts ──────────
+export function buildBeliefContext(belief = 'vastu') {
+  const rules = {
+    vastu: [
+      "North-East (Ishanya) must stay open and uncluttered — no heavy rooms.",
+      "Main entrance preferred on North or East wall.",
+      "Master Bedroom in South-West — heaviest, most stable zone.",
+      "Kitchen in South-East (Agneya — fire zone); cooking to face East.",
+      "Pooja/prayer room in North-East, on ground floor only.",
+      "Bathrooms/toilets in North-West or West — never in NE or SW.",
+      "Living room in North or East wing.",
+      "Staircase in South, West, or South-West — never in centre (Brahmasthan).",
+      "Brahmasthan (centre) to remain open — no column, pillar, or heavy wall.",
+      "Overhead water tank on South-West of terrace; underground sump in NE.",
+      "No beam running over sleeping heads (bed positions must avoid beams).",
+      "Setbacks: larger on North and East sides, smaller on South and West.",
+    ],
+    islamic: [
+      "Entrance (Bab) must NOT directly face the Qibla direction (toward Mecca, ~SW from India); offset it to reduce distraction during Salah.",
+      "Vestibule (Darhliz) at entry — visitors must not directly see into the private interior from the door.",
+      "Salamlik (men's formal reception / Majlis) near entrance; Haramlik (family/women's quarters) deep inside — strict public→private gradient.",
+      "Wudu (ablution) space with running water adjacent to any prayer room; also near main bathroom.",
+      "Central courtyard (Sahn/Hawsh) preferred — sky connection, natural ventilation, spiritual focus.",
+      "Mashrabiya or Jali screens on windows facing the street — privacy without blocking light or air.",
+      "Kitchen (food preparation) must be separate from prayer space; no direct visual connection.",
+      "Garden (Bustan/Char Bagh) in four-quadrant pattern when space allows — paradise symbolism.",
+      "Riwaq (shaded colonnade) along courtyard edges for summer circulation without sun exposure.",
+      "No figurative artwork or sculpture as permanent architectural element in primary rooms.",
+      "Geometric tile or plasterwork patterns (Islīmī) preferred for ornamentation over figurative motifs.",
+      "Guest bathroom (for Wudu) accessible without passing through private family zones.",
+    ],
+    christian: [
+      "Primary living spaces and main entrance should face East — toward sunrise, symbol of resurrection.",
+      "Entry sequence: porch/portico (threshold) → vestibule (narthex-like) → main hall — three-stage liminal progression.",
+      "Main hall / family gathering space as the spiritual heart of home; higher ceiling preferred (connection to the divine).",
+      "A dedicated prayer/contemplation alcove or chapel niche in the East or North-East of the home.",
+      "Garden or outdoor courtyard (Hortus Conclusus) ideally enclosed on three sides — paradise and refuge symbolism.",
+      "Proportions: rooms should follow harmonic ratios — 1:1 (square), 1:√2, or 1:φ (golden ratio ≈ 1:1.618).",
+      "Natural light from East and South preferred — no primary windows on North or West of sanctuary spaces.",
+      "Clerestory or high windows in main hall where height allows — 'Lux Divina' (divine light from above).",
+      "Cruciform or cross-axis plan encouraged — living/dining on one axis, bedrooms/prayer on perpendicular axis.",
+      "Strong threshold at front door — visible, well-framed, welcoming; hospitality is a core Christian spatial value.",
+      "Labyrinthine or processional path from gate to front door (not a straight driveway) encourages contemplative approach.",
+      "Bell tower element or prominent vertical feature at home's highest or most visible corner — optional but spiritually evocative.",
+    ],
+    universal: [
+      "Maximise natural light: primary living areas face South or East.",
+      "Privacy gradient: entrance zone → semi-public living → private bedrooms.",
+      "Cross-ventilation: openings on opposite walls of primary rooms.",
+      "Kitchen near rear or side entry for service access.",
+      "Bathrooms grouped on one plumbing wall to reduce pipe runs.",
+      "Bedroom away from street-facing walls for noise reduction.",
+      "Open plan living-dining for social connection.",
+      "Adequate storage in every room.",
+    ],
+  };
+  const labels = {
+    vastu: 'Vastu Shastra',
+    islamic: 'Islāmī Mīmārī (Islamic Architecture)',
+    christian: 'Sacred Christian Design',
+    universal: 'Universal Design Principles',
+  };
+  const list = (rules[belief] || rules.vastu).map((r,i) => `${i+1}. ${r}`).join('\n');
+  return { label: labels[belief] || labels.vastu, rules: list };
+}
+
+export function buildBeliefCriticPrompt(svgSnippet, rooms, plotW, plotH, belief = 'vastu') {
+  const { label, rules } = buildBeliefContext(belief);
+  const roomSummary = rooms.map(r => `${r.name}→${r.vastu || r.zone || 'placed'}`).join(", ");
+  return `You are a strict ${label} expert. Audit this ${plotW}×${plotH}ft floor plan against ${label} principles.
+
+Room placements: ${roomSummary}
+
+${label} Rules to audit:
+${rules}
+
+SVG snippet (first 1500 chars for visual context):
+${svgSnippet.substring(0, 1500)}
+
+Respond ONLY as strict JSON (no markdown, no code fences):
+{
+  "score": <integer 0-100>,
+  "violations": [
+    {"rule": "<which rule is violated>", "severity": "critical|major|minor", "fix": "<actionable fix>"}
+  ],
+  "compliant": ["<list of rules that pass>"],
+  "summary": "<one sentence overall assessment>",
+  "remedies": ["<short remedy suggestion if any critical violation>"]
+}`;
+}

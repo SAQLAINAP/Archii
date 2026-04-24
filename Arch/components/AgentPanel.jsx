@@ -1,15 +1,26 @@
 "use client";
 
-const AGENTS = [
-  { id:"input",     label:"Input Parser",    icon:"◈", color:"#4488FF", desc:"Validating constraints & regulations" },
-  { id:"spatial",   label:"Spatial Planner", icon:"◈", color:"#44DD88", desc:"Computing Vastu room layout" },
-  { id:"svg",       label:"SVG Renderer",    icon:"◈", color:"#FFAA22", desc:"Generating architectural drawing" },
-  { id:"vastu",     label:"Vastu Critic",    icon:"◈", color:"#FF8833", desc:"Auditing 14 Vastu Shastra rules" },
-  { id:"cost",      label:"Cost Estimator",  icon:"◈", color:"#CC66FF", desc:"Calculating BOM & cost breakdown" },
-  { id:"furniture", label:"Furniture AI",    icon:"◈", color:"#22CCCC", desc:"Auto-placing furniture with clearances" },
-];
+const BELIEF_CRITIC = {
+  vastu:     { label:"Vastu Critic",    desc:"Auditing 14 Vastu Shastra rules" },
+  islamic:   { label:"Islamic Critic",  desc:"Auditing Islāmī Mīmārī rules" },
+  christian: { label:"Christian Critic",desc:"Auditing Sacred Christian rules" },
+  universal: { label:"Design Critic",   desc:"Auditing Universal Design rules" },
+};
 
-export default function AgentPanel({ statuses, activeAgent, scores }) {
+function getAgents(belief) {
+  const critic = BELIEF_CRITIC[belief] || BELIEF_CRITIC.vastu;
+  return [
+    { id:"input",     label:"Input Parser",    icon:"◈", color:"#4488FF", desc:"Validating constraints & regulations" },
+    { id:"spatial",   label:"Spatial Planner", icon:"◈", color:"#44DD88", desc:"Computing room layout" },
+    { id:"svg",       label:"SVG Renderer",    icon:"◈", color:"#FFAA22", desc:"Generating architectural drawing" },
+    { id:"vastu",     label:critic.label,      icon:"◈", color:"#FF8833", desc:critic.desc },
+    { id:"cost",      label:"Cost Estimator",  icon:"◈", color:"#CC66FF", desc:"Calculating BOM & cost breakdown" },
+    { id:"furniture", label:"Furniture AI",    icon:"◈", color:"#22CCCC", desc:"Auto-placing furniture with clearances" },
+  ];
+}
+
+export default function AgentPanel({ statuses, activeAgent, scores, belief }) {
+  const AGENTS = getAgents(belief || "vastu");
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
       {AGENTS.map(ag => {

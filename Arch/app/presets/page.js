@@ -1,8 +1,9 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { VASTU_PRESETS, ARCHETYPES, PLOT_SHAPES } from "../../lib/presets";
 import { computeLayout, ROOM_COLORS } from "../../lib/layoutEngine";
+import { supabase } from "../../lib/supabase";
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const C = {
@@ -200,7 +201,8 @@ function PresetCard({ item }) {
       budget: item.budget,
       floors: item.floors,
     };
-    const hash = btoa(JSON.stringify(params));
+    // encodeURIComponent handles non-Latin chars like ₹ that btoa can't encode
+    const hash = btoa(encodeURIComponent(JSON.stringify(params)));
     window.location.href = `/app#${hash}`;
   }
 
@@ -450,7 +452,7 @@ function NavBar() {
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         {[
           { label: "Studio",       href: "/app" },
-          { label: "Glossary",     href: "/glossary" },
+          { label: "Beliefs",     href: "/beliefs" },
           { label: "Canvas Check", href: "/canvas" },
         ].map(({ label, href }) => (
           <Link key={href} href={href} style={{
@@ -482,17 +484,64 @@ const BUDGETS = [
   "Luxury (₹1Cr+)",
 ];
 
+// ─── DB row → preset shape ─────────────────────────────────────────────────────
+function rowToPreset(r) {
+  return {
+    id:           r.id,
+    name:         r.name,
+    subtitle:     r.subtitle,
+    tag:          r.tag,
+    plotW:        r.plot_w,
+    plotH:        r.plot_h,
+    bhk:          r.bhk,
+    facing:       r.facing,
+    city:         r.city,
+    budget:       r.budget,
+    floors:       r.floors,
+    area:         r.area,
+    vastuScore:   r.vastu_score,
+    estCost:      r.est_cost,
+    highlights:   r.highlights   || [],
+    category:     r.category,
+    culturalNote: r.cultural_note,
+    vastuNote:    r.vastu_note,
+    icon:         r.icon,
+    origin:       r.origin,
+    adjustments:  r.adjustments  || [],
+    features:     r.features     || [],
+  };
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function PresetsPage() {
-  const [activeTab, setActiveTab]     = useState(0); // 0=presets, 1=archetypes, 2=shapes
-  const [bhkFilter, setBhkFilter]     = useState("All");
+  const [activeTab, setActiveTab]       = useState(0);
+  const [bhkFilter, setBhkFilter]       = useState("All");
   const [budgetFilter, setBudgetFilter] = useState("All");
   const [facingFilter, setFacingFilter] = useState("All");
 
+  // Live data from Supabase; fall back to static while loading
+  const [dbStandard,   setDbStandard]   = useState(VASTU_PRESETS);
+  const [dbArchetypes, setDbArchetypes] = useState(ARCHETYPES);
+  const [dbShapes,     setDbShapes]     = useState(PLOT_SHAPES);
+
+  useEffect(() => {
+    supabase
+      .from("vastu_presets")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .then(({ data, error }) => {
+        if (error || !data?.length) return;
+        const all = data.map(rowToPreset);
+        setDbStandard(all.filter(p => p.category === "standard"));
+        setDbArchetypes(all.filter(p => p.category === "archetype"));
+        setDbShapes(all.filter(p => p.category === "shape"));
+      });
+  }, []);
+
   const tabs = [
-    { label: `Vastu Presets (${VASTU_PRESETS.length})`,      data: VASTU_PRESETS  },
-    { label: `Cultural Archetypes (${ARCHETYPES.length})`,   data: ARCHETYPES     },
-    { label: `Plot Shapes (${PLOT_SHAPES.length})`,          data: PLOT_SHAPES    },
+    { label: `Vastu Presets (${dbStandard.length})`,      data: dbStandard   },
+    { label: `Cultural Archetypes (${dbArchetypes.length})`, data: dbArchetypes },
+    { label: `Plot Shapes (${dbShapes.length})`,          data: dbShapes     },
   ];
 
   const filtered = useMemo(() => {
@@ -504,7 +553,7 @@ export default function PresetsPage() {
       if (facingFilter !== "All" && p.facing !== facingFilter) return false;
       return true;
     });
-  }, [activeTab, bhkFilter, budgetFilter, facingFilter]);
+  }, [activeTab, bhkFilter, budgetFilter, facingFilter, dbStandard, dbArchetypes, dbShapes]);
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "inherit" }}>

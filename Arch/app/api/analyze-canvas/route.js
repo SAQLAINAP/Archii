@@ -1,36 +1,68 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 
-// Guard: treat placeholder values like missing keys (same logic as /api/claude/route.js)
 function isRealKey(key) {
   if (!key) return false;
-  if (key.includes('...')) return false;   // template placeholder
-  if (key.length < 16) return false;       // too short to be real
+  if (key.includes('...')) return false;
+  if (key.length < 16) return false;
   return true;
 }
 
+function parseJSON(raw) {
+  try { return JSON.parse(raw.replace(/```json|```/g, '').trim()); }
+  catch { return null; }
+}
+
+// Build a text description of rooms for providers that can't do vision
+function describeRooms(rooms, plotW, plotH) {
+  if (!rooms?.length) return 'No rooms provided.';
+  // Normalise canvas coords (600×450px) → fractional position (0-1)
+  const CW = 600, CH = 450;
+  const described = rooms.map(r => {
+    const cx = (r.x + r.w / 2) / CW;
+    const cy = (r.y + r.h / 2) / CH;
+    // Map fractional position to compass zone
+    const col = cx < 0.33 ? 'West' : cx < 0.67 ? 'Centre' : 'East';
+    const row = cy < 0.33 ? 'North' : cy < 0.67 ? 'Centre' : 'South';
+    const zone = row === 'Centre' && col === 'Centre' ? 'Center'
+      : row === 'Centre' ? col
+      : col === 'Centre' ? row
+      : `${row}-${col === 'West' ? 'West' : col === 'East' ? 'East' : col}`;
+    return `${r.label} → ${zone} zone (canvas pos: ${Math.round(cx * 100)}% from left, ${Math.round(cy * 100)}% from top)`;
+  }).join('\n');
+  return `Plot: ${plotW}×${plotH}ft\nRooms:\n${described}`;
+}
+
+const BELIEF_LABELS = {
+  vastu:     'Vastu Shastra',
+  islamic:   'Islāmī Mīmārī (Islamic Architecture)',
+  christian: 'Sacred Christian Design',
+  universal: 'Universal Design Principles',
+};
+
 export async function POST(req) {
-  const { imageBase64, plotW = 30, plotH = 40 } = await req.json();
+  const { imageBase64, plotW = 30, plotH = 40, rooms = [], belief = 'vastu' } = await req.json();
 
   if (!imageBase64) {
     return Response.json({ error: 'Missing imageBase64' }, { status: 400 });
   }
 
-  const systemPrompt = `You are an expert Vastu Shastra consultant analysing hand-drawn floor plan sketches. You identify rooms, their compass zone positions, and assess Vastu compliance. Respond ONLY as valid JSON — no markdown, no code fences.`;
+  const beliefLabel = BELIEF_LABELS[belief] || BELIEF_LABELS.vastu;
+  const systemPrompt = `You are an expert ${beliefLabel} consultant. Analyse floor plan room positions and assess compliance with ${beliefLabel} principles. Respond ONLY as valid JSON — no markdown, no code fences.`;
 
-  const userPrompt = `Analyse this hand-drawn floor plan sketch (${plotW}×${plotH}ft plot). The user has drawn and labelled rooms. Determine each room's cardinal zone (N/S/E/W/NE/NW/SE/SW/Center) based on its position in the image. Then evaluate Vastu compliance.
-
-Respond ONLY as this exact JSON structure:
-{
+  const jsonSchema = `{
   "score": <integer 0-100>,
   "rooms_detected": [{"name": "<room name>", "zone": "<zone>", "assessment": "good|acceptable|violation"}],
-  "violations": [{"room": "<name>", "issue": "<specific vastu issue>", "severity": "critical|major|minor", "fix": "<actionable fix>"}],
-  "positives": ["<things done correctly>"],
+  "violations": [{"room": "<name>", "issue": "<specific ${beliefLabel} issue>", "severity": "critical|major|minor", "fix": "<actionable fix>"}],
+  "positives": ["<things done correctly per ${beliefLabel}>"],
   "summary": "<2-sentence overall assessment>",
   "overall_advice": "<1-2 sentences of the most important change to make>"
 }`;
 
-  // ── Try Anthropic first (vision capable) ──────────────────────────────────
+  const visionPrompt = `Analyse this hand-drawn floor plan sketch (${plotW}×${plotH}ft plot). Identify each room's cardinal zone (N/S/E/W/NE/NW/SE/SW/Center) from its position. Evaluate compliance with ${beliefLabel} principles.\n\nRespond ONLY as:\n${jsonSchema}`;
+
+  // ── 1. Anthropic vision ───────────────────────────────────────────────────
   if (isRealKey(process.env.ANTHROPIC_API_KEY)) {
     try {
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -41,41 +73,55 @@ Respond ONLY as this exact JSON structure:
         messages: [{
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/png', data: imageBase64 },
-            },
-            { type: 'text', text: userPrompt },
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imageBase64 } },
+            { type: 'text', text: visionPrompt },
           ],
         }],
       });
-      const text = response.content[0].text;
-      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
-      return Response.json({ ...parsed, provider: 'claude' });
+      const parsed = parseJSON(response.content[0].text);
+      if (parsed) return Response.json({ ...parsed, provider: 'claude' });
     } catch (e) {
       console.error('Anthropic vision error:', e.message);
     }
   }
 
-  // ── Fallback: Gemini vision ───────────────────────────────────────────────
+  // ── 2. Gemini vision ──────────────────────────────────────────────────────
   if (isRealKey(process.env.GEMINI_API_KEY)) {
     try {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
       const result = await model.generateContent([
-        systemPrompt + '\n\n' + userPrompt,
+        systemPrompt + '\n\n' + visionPrompt,
         { inlineData: { mimeType: 'image/png', data: imageBase64 } },
       ]);
-      const text = result.response.text();
-      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
-      return Response.json({ ...parsed, provider: 'gemini' });
+      const parsed = parseJSON(result.response.text());
+      if (parsed) return Response.json({ ...parsed, provider: 'gemini' });
     } catch (e) {
       console.error('Gemini vision error:', e.message);
     }
   }
 
+  // ── 3. Groq text fallback (uses room positions from client state) ─────────
+  if (isRealKey(process.env.GROQ_API_KEY)) {
+    try {
+      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+      const roomDesc = describeRooms(rooms, plotW, plotH);
+      const textPrompt = `${systemPrompt}\n\nThe user has drawn a floor plan. Here are the rooms and their computed positions:\n\n${roomDesc}\n\nEvaluate compliance with ${beliefLabel} principles for this layout.\n\nRespond ONLY as:\n${jsonSchema}`;
+      const chat = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: textPrompt }],
+        max_tokens: 1500,
+        temperature: 0.3,
+      });
+      const parsed = parseJSON(chat.choices[0].message.content);
+      if (parsed) return Response.json({ ...parsed, provider: 'groq' });
+    } catch (e) {
+      console.error('Groq text fallback error:', e.message);
+    }
+  }
+
   return Response.json(
-    { error: 'No vision-capable AI provider available. Set ANTHROPIC_API_KEY or GEMINI_API_KEY.' },
+    { error: 'Analysis unavailable — all AI providers failed or are unconfigured.' },
     { status: 500 }
   );
 }

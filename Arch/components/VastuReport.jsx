@@ -4,7 +4,14 @@ import { VASTU_RULES_LIST } from "../lib/vastuRules";
 const SEV_COLOR = { critical:"#FF5544", major:"#FFAA22", minor:"#66AAFF" };
 const SEV_BG    = { critical:"#200A08", major:"#1E1400", minor:"#080E20" };
 
-export default function VastuReport({ report }) {
+const BELIEF_SCORE_LABEL = {
+  vastu:     "Vastu Score",
+  islamic:   "Islāmī Score",
+  christian: "Christian Score",
+  universal: "Design Score",
+};
+
+export default function VastuReport({ report, belief }) {
   if (!report) return (
     <div>
       <p style={{ color:"#555", fontSize:11, fontFamily:"monospace", marginBottom:20 }}>
@@ -47,7 +54,7 @@ export default function VastuReport({ report }) {
         </svg>
         <div>
           <div style={{ fontSize:11, color:"#FFAA22", fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:4 }}>
-            Vastu Score
+            {BELIEF_SCORE_LABEL[belief] || "Vastu Score"}
           </div>
           <div style={{ fontSize:10, color:"#AAA", lineHeight:1.5, maxWidth:220 }}>{report.summary}</div>
           <div style={{ marginTop:8, display:"flex", gap:12 }}>

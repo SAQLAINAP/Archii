@@ -128,6 +128,9 @@ export default function CanvasPage() {
   const [prompt, setPrompt] = useState(null);
   // { canvasX, canvasY, pageX, pageY, mode: "new"|"rename", pendingRect, roomId }
 
+  // Belief system
+  const [belief, setBelief] = useState("vastu");
+
   // Analysis state
   const [analysisState, setAnalysisState] = useState("idle"); // idle | loading | done | error
   const [result, setResult] = useState(null);
@@ -370,7 +373,7 @@ export default function CanvasPage() {
       const res = await fetch("/api/analyze-canvas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64, plotW: Number(plotW), plotH: Number(plotH) }),
+        body: JSON.stringify({ imageBase64, plotW: Number(plotW), plotH: Number(plotH), rooms, belief }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || "Analysis failed");
@@ -530,7 +533,7 @@ export default function CanvasPage() {
           {[
             { label: "Studio",   href: "/app" },
             { label: "Presets",  href: "/presets" },
-            { label: "Glossary", href: "/glossary" },
+            { label: "Beliefs", href: "/beliefs" },
           ].map(link => (
             <button
               key={link.href}
@@ -686,6 +689,24 @@ export default function CanvasPage() {
 
             {/* Plot dimensions + submit */}
             <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+              {/* Belief system selector */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+                {[
+                  { id:"vastu",     label:"Vastu Shastra", color:"#F0E040" },
+                  { id:"islamic",   label:"Islāmī Mīmārī", color:"#44DD88" },
+                  { id:"christian", label:"Sacred Christian", color:"#4488FF" },
+                  { id:"universal", label:"Universal",     color:"#888899" },
+                ].map(b => (
+                  <button key={b.id} onClick={() => setBelief(b.id)} style={{
+                    padding: "5px 12px", borderRadius: 16,
+                    border: `1px solid ${belief === b.id ? b.color+"80" : "#2A2A4A"}`,
+                    background: belief === b.id ? `${b.color}14` : "transparent",
+                    color: belief === b.id ? b.color : "#55557A",
+                    fontSize: 11, fontFamily: "monospace", fontWeight: 600,
+                    cursor: "pointer", transition: "all 0.15s",
+                  }}>{b.label}</button>
+                ))}
+              </div>
               <div style={{
                 display: "flex", alignItems: "center", gap: 16, marginBottom: 14,
                 flexWrap: "wrap",
@@ -748,18 +769,21 @@ export default function CanvasPage() {
                 ROOMS ON CANVAS
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-                {rooms.map((r, i) => (
-                  <div key={r.id} style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    padding: "5px 10px", borderRadius: 8,
-                    background: r.color || ROOM_PALETTE[i % ROOM_PALETTE.length],
-                    border: `1px solid ${r.borderColor || ROOM_BORDER[i % ROOM_BORDER.length]}`,
-                    fontSize: 12, color: "#222",
-                  }}>
-                    <span style={{ fontSize: 9, opacity: 0.5 }}>▭</span>
-                    {r.label}
-                  </div>
-                ))}
+                {rooms.map((r, i) => {
+                  const borderCol = r.borderColor || ROOM_BORDER[i % ROOM_BORDER.length];
+                  return (
+                    <div key={r.id} style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "5px 10px", borderRadius: 8,
+                      background: r.color || ROOM_PALETTE[i % ROOM_PALETTE.length],
+                      border: `1px solid ${borderCol}`,
+                      fontSize: 12, color: borderCol,
+                    }}>
+                      <span style={{ fontSize: 9, opacity: 0.6 }}>▭</span>
+                      {r.label}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -14,6 +14,8 @@ import { checkRegulatory } from "../../lib/cityCode";
 import {
   buildFloorPlanSVGPrompt,
   buildVastuCriticPrompt,
+  buildBeliefCriticPrompt,
+  buildBeliefContext,
   buildCostEstimatorPrompt,
   buildFurniturePrompt,
   buildExplainToParentsPrompt,
@@ -165,7 +167,7 @@ function ScoreBadge({ label, score, color }) {
 export default function App() {
   const [params, setParams] = useState({
     plotW:30, plotH:40, bhk:3, city:"BBMP (Bengaluru)",
-    facing:"North", budget:"Lower-Premium (₹40-60L)", floors:1,
+    facing:"North", budget:"Lower-Premium (₹40-60L)", floors:1, belief:"vastu",
   });
   const [tab, setTab]             = useState("plan");
   const [svgCode, setSvgCode]     = useState("");
@@ -210,7 +212,7 @@ export default function App() {
     const hash = window.location.hash.slice(1);
     if (!hash) return;
     try {
-      const p = JSON.parse(atob(hash));
+      const p = JSON.parse(decodeURIComponent(atob(hash)));
       if (p?.plotW) setParams(p);
     } catch {}
   }, []);
@@ -334,12 +336,13 @@ export default function App() {
       setAgent("svg", "done");
       setAgentScores(s => ({ ...s, svg: 92 }));
 
-      // ── Agent 4: Vastu Critic ────────────────────────────────────────────
+      // ── Agent 4: Belief System Critic ────────────────────────────────────
       setAgent("vastu", "running");
-      addLog("Vastu Critic: auditing 14 Vastu Shastra rules…");
+      const beliefCtx = buildBeliefContext(params.belief || 'vastu');
+      addLog(`${beliefCtx.label} Critic: auditing design rules…`);
       const vastuRaw = await claude(
-        "You are a strict Vastu Shastra expert. Respond ONLY as valid JSON with no markdown.",
-        buildVastuCriticPrompt(newSVG, lyt.rooms, params.plotW, params.plotH),
+        `You are a strict ${beliefCtx.label} expert. Respond ONLY as valid JSON with no markdown.`,
+        buildBeliefCriticPrompt(newSVG, lyt.rooms, params.plotW, params.plotH, params.belief || 'vastu'),
         1800
       );
       const vParsed = parseJSON(vastuRaw);
@@ -526,17 +529,37 @@ export default function App() {
     img.src = URL.createObjectURL(new Blob([svgCode], { type:"image/svg+xml" }));
   };
 
+  const exportPDF = () => {
+    if (!svgCode) return;
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html><head><title>Floor Plan</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#fff}svg{max-width:100%;max-height:100vh;display:block}</style></head><body>${svgCode}</body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 400);
+  };
+
   // ── Tab definitions ────────────────────────────────────────────────────────
+  const beliefTabLabel = { vastu:"Vastu", islamic:"Islamic", christian:"Christian", universal:"Design" };
+  const beliefAuditHeading = {
+    vastu:     "Vastu Shastra Audit",
+    islamic:   "Islāmī Mīmārī Audit",
+    christian: "Sacred Christian Audit",
+    universal: "Universal Design Audit",
+  };
+  const beliefRuleCount = { vastu:"14", islamic:"12", christian:"12", universal:"12" };
   const TABS = [
     { id:"plan",    label:"Floor Plan" },
-    { id:"vastu",   label:"Vastu" },
+    { type:"sep" },
+    { id:"vastu",   label: beliefTabLabel[params.belief] || "Vastu" },
     { id:"cost",    label:"Cost" },
     { id:"timeline",label:"Timeline" },
+    { type:"sep" },
     { id:"chat",    label:"Modify" },
     { id:"alts",    label:"Alts" },
     { id:"compare", label:"Compare" },
-    { id:"log",     label:"Log" },
+    { type:"sep" },
     { id:"saved",   label:"My Plans" },
+    { id:"log",     label:"Log" },
   ];
 
   const vastuScore = vastuReport?.score ?? null;
@@ -558,7 +581,7 @@ export default function App() {
         }}>{notification}</div>
       )}
 
-      {/* ── Sidebar ── */}
+      {/* ── Left Sidebar ── */}
       <Sidebar
         params={params}
         onParamChange={handleParamChange}
@@ -569,13 +592,6 @@ export default function App() {
         generating={generating}
         hasPlan={!!svgCode}
         regErrors={regErrors}
-        agentPanel={
-          <AgentPanel
-            statuses={agentStatuses}
-            activeAgent={activeAgent}
-            scores={agentScores}
-          />
-        }
       />
 
       {/* ── Main content ── */}
@@ -591,144 +607,24 @@ export default function App() {
           overflowX:"auto",
           flexShrink:0,
         }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={()=>{
-              setTab(t.id);
-              if (t.id === "saved" || t.id === "compare") fetchPlans();
-            }} style={{
-              padding:"12px 18px",
-              background:"transparent",
-              border:"none",
-              borderBottom: tab===t.id ? "2px solid #4488FF" : "2px solid transparent",
-              color: tab===t.id ? "#4488FF" : "#444",
-              fontSize:11, cursor:"pointer",
-              fontFamily:"monospace", fontWeight:700,
-              letterSpacing:"0.06em", textTransform:"uppercase",
-              transition:"color 0.15s",
-              marginBottom:"-2px",
-            }}>{t.label}</button>
-          ))}
-
-          <div style={{ flex:1, minWidth:8 }}/>
-
-          {/* Theme switcher: dark → blueprint → light → dark */}
-          <button
-            onClick={() => setTheme(t => t==='dark'?'blueprint':t==='blueprint'?'light':'dark')}
-            title={`Theme: ${theme} (click to cycle)`}
-            style={{
-              padding:'0 10px', background:'transparent',
-              border:'1px solid #1A1A28', borderRadius:4,
-              fontSize:16, cursor:'pointer', alignSelf:'center',
-              marginRight:4, lineHeight:1,
-            }}>
-            {theme==='dark'?'🌙':theme==='blueprint'?'📐':'☀️'}
-          </button>
-
-          {/* Share link */}
-          {svgCode && (
-            <button onClick={copyShareLink} style={{
-              padding:'4px 10px', background:'transparent',
-              border:'1px solid #1A2A3A', borderRadius:4,
-              color:'#4488FF', fontSize:9, cursor:'pointer',
-              fontFamily:'monospace', letterSpacing:'0.04em',
-              alignSelf:'center', marginRight:3, whiteSpace:'nowrap',
-            }}>SHARE</button>
-          )}
-
-          {/* WhatsApp share */}
-          {svgCode && (
-            <button onClick={shareWhatsApp} title="Share on WhatsApp" style={{
-              padding:'0 9px', background:'transparent',
-              border:'1px solid #0A200A', borderRadius:4,
-              color:'#22AA44', fontSize:16, cursor:'pointer',
-              alignSelf:'center', marginRight:6, lineHeight:1,
-            }}>📲</button>
-          )}
-
-          {/* Room Labels toggle */}
-          {svgCode && tab==='plan' && (
-            <label style={{
-              display:'flex', alignItems:'center', gap:5,
-              fontSize:9, color:'#555', cursor:'pointer',
-              fontFamily:'monospace', alignSelf:'center',
-              marginRight:8, whiteSpace:'nowrap',
-            }}>
-              <div onClick={()=>setShowLabels(v=>!v)} style={{
-                width:26, height:14, borderRadius:7, flexShrink:0,
-                background: showLabels ? '#FFAA22' : '#1A1A2A',
-                position:'relative', cursor:'pointer', transition:'background 0.2s',
-              }}>
-                <div style={{ width:10, height:10, borderRadius:'50%', background:'#FFF',
-                  position:'absolute', top:2, left: showLabels ? 14 : 2, transition:'left 0.2s' }}/>
-              </div>
-              Labels
-            </label>
-          )}
-
-          {/* Sun Path toggle */}
-          {svgCode && tab==='plan' && (
-            <label style={{
-              display:'flex', alignItems:'center', gap:5,
-              fontSize:9, color:'#555', cursor:'pointer',
-              fontFamily:'monospace', alignSelf:'center',
-              marginRight:6, whiteSpace:'nowrap',
-            }}>
-              <div onClick={()=>setShowSunPath(v=>!v)} style={{
-                width:26, height:14, borderRadius:7, flexShrink:0,
-                background: showSunPath ? '#FFBB44' : '#1A1A2A',
-                position:'relative', cursor:'pointer', transition:'background 0.2s',
-              }}>
-                <div style={{ width:10, height:10, borderRadius:'50%', background:'#FFF',
-                  position:'absolute', top:2, left: showSunPath ? 14 : 2, transition:'left 0.2s' }}/>
-              </div>
-              ☀ Path
-            </label>
-          )}
-
-          {/* Score badges */}
-          {vastuScore !== null && (
-            <div style={{ display:"flex", gap:8, alignItems:"center", paddingRight:8 }}>
-              <ScoreBadge label="Vastu"    score={vastuScore} color={vastuScore>=80?"#44DD88":vastuScore>=60?"#FFAA22":"#FF5544"} />
-              {costTotal && <ScoreBadge label={`₹${costTotal}L`} score={null} color="#CC66FF"/>}
-            </div>
-          )}
-
-          {/* Furniture toggle */}
-          {svgCode && tab==="plan" && (
-            <label style={{
-              display:"flex", alignItems:"center", gap:6,
-              fontSize:10, color:"#555", cursor:"pointer",
-              fontFamily:"monospace", paddingRight:4,
-            }}>
-              <div
-                onClick={()=>setShowFurniture(v=>!v)}
-                style={{
-                  width:28, height:16, borderRadius:8,
-                  background: showFurniture ? "#22CCCC" : "#1A1A2A",
-                  position:"relative", cursor:"pointer",
-                  transition:"background 0.2s",
-                  border:`1px solid ${showFurniture ? "#22CCCC" : "#2A2A3A"}`,
-                }}>
-                <div style={{
-                  width:12, height:12, borderRadius:"50%", background:"#FFF",
-                  position:"absolute", top:1,
-                  left: showFurniture ? 14 : 2,
-                  transition:"left 0.2s",
-                }}/>
-              </div>
-              Furniture
-            </label>
-          )}
-
-          {/* Diff toggle */}
-          {prevSvg && tab==="plan" && (
-            <button onClick={()=>setShowDiff(d=>!d)} style={{
-              padding:"4px 10px",
-              background:"transparent", border:"1px solid #1A1A28",
-              borderRadius:4, color: showDiff ? "#4488FF" : "#444",
-              fontSize:9, cursor:"pointer", fontFamily:"monospace",
-              marginLeft:4,
-            }}>DIFF</button>
+          {TABS.map((t, idx) => t.type === "sep"
+            ? <div key={`sep-${idx}`} style={{ width:1, background:"#1A1A2A", alignSelf:"stretch", margin:"8px 6px", flexShrink:0 }}/>
+            : <button key={t.id} onClick={()=>{
+                setTab(t.id);
+                if (t.id === "saved" || t.id === "compare") fetchPlans();
+              }} style={{
+                padding:"12px 14px",
+                background:"transparent",
+                border:"none",
+                borderBottom: tab===t.id ? "2px solid #4488FF" : "2px solid transparent",
+                color: tab===t.id ? "#4488FF" : "#444",
+                fontSize:10, cursor:"pointer",
+                fontFamily:"monospace", fontWeight:700,
+                letterSpacing:"0.06em", textTransform:"uppercase",
+                transition:"color 0.15s",
+                marginBottom:"-2px",
+                whiteSpace:"nowrap",
+              }}>{t.label}</button>
           )}
         </div>
 
@@ -782,9 +678,9 @@ export default function App() {
               <div style={{ maxWidth:640 }}>
                 <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:20 }}>
                   <h2 style={{ fontSize:22, fontWeight:700, color:"#F0E040", fontFamily:"Georgia,serif" }}>
-                    Vastu Shastra Audit
+                    {beliefAuditHeading[params.belief] || "Vastu Shastra Audit"}
                   </h2>
-                  <span style={{ fontSize:10, color:"#555", fontFamily:"monospace" }}>14 rules checked</span>
+                  <span style={{ fontSize:10, color:"#555", fontFamily:"monospace" }}>{beliefRuleCount[params.belief] || "14"} rules checked</span>
                 </div>
 
                 {/* Fix All Violations */}
@@ -805,7 +701,7 @@ export default function App() {
                   </div>
                 )}
 
-                <VastuReport report={vastuReport}/>
+                <VastuReport report={vastuReport} belief={params.belief}/>
 
                 {/* Explain to My Parents */}
                 {vastuReport && (
@@ -850,7 +746,7 @@ export default function App() {
           {/* Cost */}
           {tab==="cost" && (
             <div style={{ flex:1, overflow:"auto", padding:24 }}>
-              <div style={{ maxWidth:640 }}>
+              <div style={{ maxWidth:860 }}>
                 <h2 style={{ fontSize:22, fontWeight:700, color:"#CC66FF", fontFamily:"Georgia,serif", marginBottom:20 }}>
                   Cost Estimation
                 </h2>
@@ -988,6 +884,172 @@ export default function App() {
 
         </div>
       </div>
+
+      {/* ── Right: Agent Pipeline Panel ── */}
+      <div style={{
+        width: 220, minWidth: 220,
+        background: "#080814",
+        borderLeft: "2px solid #1A1A28",
+        display: "flex", flexDirection: "column",
+        overflow: "hidden", fontFamily: "monospace",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "14px 14px 10px",
+          borderBottom: "2px solid #1A1A28",
+          background: "#060610",
+        }}>
+          <div style={{ fontSize: 8, color: "#333", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+            ── Agent Pipeline ──
+          </div>
+          <div style={{ fontSize: 9, color: "#555", marginTop: 4, fontFamily: "monospace" }}>
+            {generating ? "Running…" : agentStatuses && Object.values(agentStatuses).some(s => s === "done") ? "Last run complete" : "Idle"}
+          </div>
+        </div>
+
+        {/* Agents */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <AgentPanel
+            statuses={agentStatuses}
+            activeAgent={activeAgent}
+            scores={agentScores}
+            belief={params.belief}
+          />
+        </div>
+
+        {/* Mini log */}
+        {log.length > 0 && (
+          <div style={{
+            borderTop: "2px solid #1A1A28",
+            padding: "10px 10px",
+            maxHeight: 120,
+            overflowY: "auto",
+          }}>
+            <div style={{ fontSize: 8, color: "#333", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 6 }}>
+              ── Log ──
+            </div>
+            {log.slice(0, 6).map((l, i) => (
+              <div key={i} style={{ fontSize: 8, color: "#444", fontFamily: "monospace", marginBottom: 3, lineHeight: 1.4, wordBreak: "break-word" }}>
+                {l}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Controls ── */}
+        <div style={{ borderTop: "2px solid #1A1A28", padding: "12px 10px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 8, color: "#333", letterSpacing: "0.18em", textTransform: "uppercase" }}>── Controls ──</div>
+
+          {/* Score badges */}
+          {vastuScore !== null && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <ScoreBadge label={beliefTabLabel[params.belief] || "Vastu"} score={vastuScore} color={vastuScore>=80?"#44DD88":vastuScore>=60?"#FFAA22":"#FF5544"} />
+              {costTotal && <ScoreBadge label={`₹${costTotal}L`} score={null} color="#CC66FF"/>}
+            </div>
+          )}
+
+          {/* Theme + View toggles */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            {/* Theme cycle */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 9, color: "#555", fontFamily: "monospace" }}>Theme</span>
+              <button
+                onClick={() => setTheme(t => t==='dark'?'blueprint':t==='blueprint'?'light':'dark')}
+                style={{
+                  padding: "3px 10px", background: "transparent",
+                  border: "1px solid #1A1A28", borderRadius: 4,
+                  fontSize: 13, cursor: "pointer", lineHeight: 1,
+                }}>
+                {theme==='dark'?'🌙':theme==='blueprint'?'📐':'☀️'}
+              </button>
+            </div>
+
+            {/* Labels toggle */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 9, color: "#555", fontFamily: "monospace" }}>Labels</span>
+              <div onClick={() => setShowLabels(v=>!v)} style={{
+                width: 28, height: 15, borderRadius: 8, flexShrink: 0,
+                background: showLabels ? "#FFAA22" : "#1A1A2A",
+                position: "relative", cursor: "pointer", transition: "background 0.2s",
+                border: `1px solid ${showLabels ? "#FFAA22" : "#2A2A3A"}`,
+              }}>
+                <div style={{ width: 11, height: 11, borderRadius: "50%", background: "#FFF",
+                  position: "absolute", top: 1, left: showLabels ? 15 : 2, transition: "left 0.2s" }}/>
+              </div>
+            </div>
+
+            {/* Sun Path toggle */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 9, color: "#555", fontFamily: "monospace" }}>☀ Sun Path</span>
+              <div onClick={() => setShowSunPath(v=>!v)} style={{
+                width: 28, height: 15, borderRadius: 8, flexShrink: 0,
+                background: showSunPath ? "#FFBB44" : "#1A1A2A",
+                position: "relative", cursor: "pointer", transition: "background 0.2s",
+                border: `1px solid ${showSunPath ? "#FFBB44" : "#2A2A3A"}`,
+              }}>
+                <div style={{ width: 11, height: 11, borderRadius: "50%", background: "#FFF",
+                  position: "absolute", top: 1, left: showSunPath ? 15 : 2, transition: "left 0.2s" }}/>
+              </div>
+            </div>
+
+            {/* Furniture toggle */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 9, color: "#555", fontFamily: "monospace" }}>Furniture</span>
+              <div onClick={() => setShowFurniture(v=>!v)} style={{
+                width: 28, height: 15, borderRadius: 8, flexShrink: 0,
+                background: showFurniture ? "#22CCCC" : "#1A1A2A",
+                position: "relative", cursor: "pointer", transition: "background 0.2s",
+                border: `1px solid ${showFurniture ? "#22CCCC" : "#2A2A3A"}`,
+              }}>
+                <div style={{ width: 11, height: 11, borderRadius: "50%", background: "#FFF",
+                  position: "absolute", top: 1, left: showFurniture ? 15 : 2, transition: "left 0.2s" }}/>
+              </div>
+            </div>
+
+            {/* Diff toggle */}
+            {prevSvg && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 9, color: "#555", fontFamily: "monospace" }}>Diff View</span>
+                <div onClick={() => setShowDiff(d=>!d)} style={{
+                  width: 28, height: 15, borderRadius: 8, flexShrink: 0,
+                  background: showDiff ? "#4488FF" : "#1A1A2A",
+                  position: "relative", cursor: "pointer", transition: "background 0.2s",
+                  border: `1px solid ${showDiff ? "#4488FF" : "#2A2A3A"}`,
+                }}>
+                  <div style={{ width: 11, height: 11, borderRadius: "50%", background: "#FFF",
+                    position: "absolute", top: 1, left: showDiff ? 15 : 2, transition: "left 0.2s" }}/>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          {svgCode && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <div style={{ display: "flex", gap: 5 }}>
+                <button onClick={copyShareLink} style={{
+                  flex: 1, padding: "6px 4px",
+                  background: "transparent", border: "1px solid #1A2A3A",
+                  borderRadius: 4, color: "#4488FF", fontSize: 9, cursor: "pointer",
+                  fontFamily: "monospace", letterSpacing: "0.04em",
+                }}>SHARE</button>
+                <button onClick={shareWhatsApp} title="Share on WhatsApp" style={{
+                  padding: "6px 10px",
+                  background: "transparent", border: "1px solid #0A200A",
+                  borderRadius: 4, color: "#22AA44", fontSize: 14, cursor: "pointer", lineHeight: 1,
+                }}>📲</button>
+              </div>
+              <button onClick={exportPDF} style={{
+                width: "100%", padding: "7px",
+                background: "transparent", border: "1px solid #2A1A2A",
+                borderRadius: 4, color: "#CC66FF", fontSize: 9, cursor: "pointer",
+                fontFamily: "monospace", letterSpacing: "0.04em",
+              }}>↓ Export PDF</button>
+            </div>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }

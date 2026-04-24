@@ -175,8 +175,10 @@ function TermCard({ term }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         background: hovered ? "#13132a" : C.surface,
-        border: `1px solid ${hovered ? col + "55" : C.border}`,
         borderTop: `3px solid ${col}`,
+        borderRight: `1px solid ${hovered ? col + "55" : C.border}`,
+        borderBottom: `1px solid ${hovered ? col + "55" : C.border}`,
+        borderLeft: `1px solid ${hovered ? col + "55" : C.border}`,
         borderRadius: 10,
         padding: "18px 18px 16px",
         display: "flex",

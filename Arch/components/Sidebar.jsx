@@ -15,7 +15,6 @@ function FieldLabel({ children }) {
 export default function Sidebar({
   params, onParamChange, onGenerate, onGenerateAlts, onExportSVG, onExportPNG,
   generating, hasPlan, regErrors,
-  agentPanel,
 }) {
   const P = (k,v) => onParamChange(k,v);
 
@@ -43,6 +42,35 @@ export default function Sidebar({
 
       <div style={{ flex:1, overflowY:"auto", padding:14, display:"flex", flexDirection:"column", gap:12 }}>
 
+
+        {/* Section: Design Philosophy */}
+        <div style={{ fontSize:8, color:"#333", letterSpacing:"0.18em", textTransform:"uppercase" }}>
+          ── Design Philosophy ──
+        </div>
+        <div>
+          <FieldLabel>Belief System</FieldLabel>
+          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+            {[
+              { id:"vastu",     label:"Vastu Shastra",    icon:"⬡", color:"#F0E040" },
+              { id:"islamic",   label:"Islāmī Mīmārī",   icon:"☪", color:"#44DD88" },
+              { id:"christian", label:"Sacred Christian", icon:"✝", color:"#4488FF" },
+              { id:"universal", label:"Universal",        icon:"◎", color:"#888899" },
+            ].map(b => (
+              <button key={b.id} onClick={()=>P("belief", b.id)} style={{
+                width:"100%", padding:"7px 10px",
+                background: params.belief===b.id ? `${b.color}12` : "#060610",
+                border:`1px solid ${params.belief===b.id ? b.color+"60" : "#1A1A2A"}`,
+                borderRadius:5, color: params.belief===b.id ? b.color : "#444",
+                fontSize:10, fontWeight:700, cursor:"pointer", fontFamily:"monospace",
+                textAlign:"left", display:"flex", alignItems:"center", gap:7,
+                transition:"all 0.15s",
+              }}>
+                <span style={{ fontSize:12 }}>{b.icon}</span>
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Section: Plot Config */}
         <div style={{ fontSize:8, color:"#333", letterSpacing:"0.18em", textTransform:"uppercase" }}>
@@ -204,13 +232,6 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Agent pipeline */}
-      <div style={{ padding:"12px 14px", borderTop:"2px solid #1A1A28" }}>
-        <div style={{ fontSize:8, color:"#333", letterSpacing:"0.18em", textTransform:"uppercase", marginBottom:8 }}>
-          ── Agent Pipeline ──
-        </div>
-        {agentPanel}
-      </div>
     </div>
   );
 }
