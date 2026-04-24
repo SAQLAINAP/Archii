@@ -176,10 +176,11 @@ export default function LandingPage() {
           वास्तु AI
         </span>
         {[
-          { href:'/app',      label:'Studio',       color:'#4488FF' },
-          { href:'/presets',  label:'Presets',      color:'#44DD88' },
-          { href:'/beliefs', label:'Beliefs',     color:'#FFAA22' },
-          { href:'/canvas',   label:'Canvas Check', color:'#CC66FF' },
+          { href:'/app',       label:'Studio',       color:'#4488FF' },
+          { href:'/presets',   label:'Presets',      color:'#44DD88' },
+          { href:'/beliefs',   label:'Beliefs',      color:'#FFAA22' },
+          { href:'/canvas',    label:'Canvas Check', color:'#CC66FF' },
+          { href:'/dashboard', label:'Dashboard',    color:'#888899' },
         ].map(link => (
           <a key={link.href} href={link.href} style={{
             color: link.color, fontSize:11, fontWeight:600,

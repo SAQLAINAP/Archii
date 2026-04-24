@@ -112,9 +112,11 @@ function parseJSON(raw) {
 
 async function savePlanToSupabase(data) {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase
       .from('generated_plans')
       .insert([{
+        user_id: user?.id ?? null,
         plot_width: data.params.plotW,
         plot_height: data.params.plotH,
         bhk: data.params.bhk,
@@ -216,6 +218,62 @@ function DiffPanel({ prev, current }) {
   );
 }
 
+// ─── PDF Export Modal ─────────────────────────────────────────────────────────
+function PdfModal({ onExport, onClose }) {
+  const [title, setTitle]  = useState("Floor Plan Proposal");
+  const [client, setClient] = useState("");
+  const [arch, setArch]    = useState("वास्तु AI Studio");
+  const IS = {
+    width:"100%", padding:"8px 10px",
+    background:"#0A0A14", border:"1px solid #2A2A3A",
+    borderRadius:4, color:"#D8D8EC",
+    fontFamily:"monospace", fontSize:11, outline:"none",
+  };
+  return (
+    <div style={{
+      position:"fixed", inset:0, zIndex:9999,
+      background:"rgba(0,0,0,0.75)", display:"flex",
+      alignItems:"center", justifyContent:"center",
+      backdropFilter:"blur(4px)",
+    }} onClick={e => e.target===e.currentTarget && onClose()}>
+      <div style={{
+        background:"#0C0C18", border:"2px solid #2A2A3A",
+        borderRadius:10, padding:24, width:360,
+        fontFamily:"monospace",
+      }}>
+        <div style={{ fontSize:14, fontWeight:700, color:"#CC66FF", marginBottom:18, letterSpacing:"0.04em" }}>
+          ↓ Export PDF
+        </div>
+        {[
+          { label:"Project Title", val:title, set:setTitle },
+          { label:"Client Name",   val:client, set:setClient },
+          { label:"Architect / Firm", val:arch, set:setArch },
+        ].map(f => (
+          <div key={f.label} style={{ marginBottom:12 }}>
+            <div style={{ fontSize:8, color:"#555", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4 }}>{f.label}</div>
+            <input value={f.val} onChange={e=>f.set(e.target.value)} style={IS}/>
+          </div>
+        ))}
+        <div style={{ display:"flex", gap:8, marginTop:20 }}>
+          <button onClick={onClose} style={{
+            flex:1, padding:"9px", background:"transparent",
+            border:"1px solid #2A2A3A", borderRadius:5,
+            color:"#666", fontSize:10, cursor:"pointer", fontFamily:"monospace",
+          }}>Cancel</button>
+          <button onClick={() => onExport({ title, client, arch })} style={{
+            flex:2, padding:"9px",
+            background:"linear-gradient(135deg,#2A0A4A,#1A0838)",
+            border:"1px solid #8833FF66",
+            borderRadius:5, color:"#CC66FF",
+            fontSize:10, fontWeight:700, cursor:"pointer", fontFamily:"monospace",
+            letterSpacing:"0.06em",
+          }}>GENERATE PDF</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Score badge ──────────────────────────────────────────────────────────────
 function ScoreBadge({ label, score, color }) {
   return (
@@ -268,6 +326,17 @@ export default function App() {
   const [parentLang, setParentLang]   = useState(null);
   const [parentExplanation, setParentExplanation] = useState(null);
   const [loadingExplanation, setLoadingExplanation] = useState(false);
+
+  // ── Auth state ─────────────────────────────────────────────────────────────
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // ── PDF modal ─────────────────────────────────────────────────────────────
+  const [showPdfModal, setShowPdfModal] = useState(false);
 
   // ── Mobile layout ──────────────────────────────────────────────────────────
   const [isMobile, setIsMobile]           = useState(false);
@@ -621,13 +690,113 @@ export default function App() {
     img.src = URL.createObjectURL(new Blob([svgCode], { type:"image/svg+xml" }));
   };
 
-  const exportPDF = () => {
+  const exportPDF = ({ title = "Floor Plan Proposal", client = "", arch = "वास्तु AI Studio" } = {}) => {
     if (!svgCode) return;
+    setShowPdfModal(false);
+    const date = new Date().toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" });
+    const refNo = Math.random().toString(36).slice(2,8).toUpperCase();
+    const belief = params.belief || "vastu";
+    const beliefLabel = { vastu:"Vastu Shastra", islamic:"Islāmī Mīmārī", christian:"Sacred Christian", universal:"Universal Design" }[belief] || "Vastu Shastra";
+    const scoreColor = vastuReport?.score >= 80 ? "#16A34A" : vastuReport?.score >= 60 ? "#D97706" : "#DC2626";
+
+    const costRows = costReport?.breakdown
+      ? Object.entries(costReport.breakdown).filter(([,v]) => v > 0)
+          .map(([k,v]) => `<tr><td style="padding:6px 12px;text-transform:capitalize;border-bottom:1px solid #EEE">${k}</td><td style="padding:6px 12px;text-align:right;border-bottom:1px solid #EEE;font-weight:600">₹${v}L</td></tr>`).join("")
+      : "";
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>${title}</title>
+<style>
+  @page { size:A3 portrait; margin:18mm 20mm; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Georgia',serif;background:#fff;color:#1A1A2A;font-size:11px}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1A1A2A;padding-bottom:14px;margin-bottom:20px}
+  .brand{font-size:26px;font-weight:700;font-family:serif}
+  .brand-sub{font-size:8px;color:#888;letter-spacing:0.18em;margin-top:3px}
+  .proj{text-align:right;line-height:1.9;font-size:10px}
+  .plan-wrap{display:flex;justify-content:center;margin-bottom:20px;border:1px solid #E5E5E5;border-radius:4px;padding:16px;background:#FAFAFA}
+  .plan-wrap svg{max-width:100%;max-height:420px;height:auto;display:block}
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+  .stat{border:1px solid #E5E5E5;border-radius:4px;padding:10px 12px}
+  .stat-label{font-size:8px;color:#888;text-transform:uppercase;letter-spacing:0.1em}
+  .stat-value{font-size:15px;font-weight:700;margin-top:4px}
+  .section-title{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:0.12em;border-bottom:1px solid #E5E5E5;padding-bottom:6px;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;font-size:10px}
+  thead th{background:#1A1A2A;color:#fff;padding:7px 12px;text-align:left;font-family:monospace;font-size:9px;letter-spacing:0.06em}
+  .total-row td{font-weight:700;font-size:11px;background:#F5F0FF;border-top:2px solid #1A1A2A}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+  .footer{border-top:1px solid #E5E5E5;padding-top:10px;margin-top:20px;display:flex;justify-content:space-between;font-size:8px;color:#AAA}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand">वास्तु <span style="color:#6B21A8">AI</span></div>
+      <div class="brand-sub">ARCHITECTURAL DESIGN PLATFORM</div>
+      <div style="margin-top:10px;font-size:13px;font-weight:700;color:#1A1A2A">${title}</div>
+      ${client ? `<div style="font-size:10px;color:#555;margin-top:3px">Prepared for: ${client}</div>` : ""}
+    </div>
+    <div class="proj">
+      <div style="font-weight:700;font-size:12px">${arch}</div>
+      <div>Date: ${date}</div>
+      <div>Ref: VASTU-${refNo}</div>
+      <div>Belief System: ${beliefLabel}</div>
+    </div>
+  </div>
+
+  <div class="plan-wrap">${svgCode}</div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Plot Size</div><div class="stat-value">${params.plotW}×${params.plotH} ft</div></div>
+    <div class="stat"><div class="stat-label">BHK</div><div class="stat-value">${params.bhk} BHK</div></div>
+    <div class="stat"><div class="stat-label">Facing</div><div class="stat-value">${params.facing}</div></div>
+    <div class="stat"><div class="stat-label">City Code</div><div class="stat-value" style="font-size:10px">${params.city}</div></div>
+    ${vastuReport ? `<div class="stat"><div class="stat-label">${beliefLabel.split(" ")[0]} Score</div><div class="stat-value" style="color:${scoreColor}">${vastuReport.score}/100</div></div>` : ""}
+  </div>
+
+  ${costReport ? `
+  <div class="two-col">
+    <div>
+      <div class="section-title">Cost Breakdown</div>
+      <table>
+        <thead><tr><th>Category</th><th style="text-align:right">Amount</th></tr></thead>
+        <tbody>${costRows}</tbody>
+        <tfoot><tr class="total-row"><td style="padding:8px 12px">Total Estimated Cost</td><td style="padding:8px 12px;text-align:right">₹${costReport.totalCost}L</td></tr></tfoot>
+      </table>
+    </div>
+    <div>
+      <div class="section-title">Project Details</div>
+      <table>
+        <tbody>
+          <tr><td style="padding:5px 12px;border-bottom:1px solid #EEE;color:#888">Built-up Area</td><td style="padding:5px 12px;border-bottom:1px solid #EEE;text-align:right;font-weight:600">${costReport.builtUpArea?.toLocaleString("en-IN")} sqft</td></tr>
+          <tr><td style="padding:5px 12px;border-bottom:1px solid #EEE;color:#888">Rate / sqft</td><td style="padding:5px 12px;border-bottom:1px solid #EEE;text-align:right;font-weight:600">₹${costReport.perSqftRate?.toLocaleString("en-IN")}</td></tr>
+          <tr><td style="padding:5px 12px;border-bottom:1px solid #EEE;color:#888">Timeline</td><td style="padding:5px 12px;border-bottom:1px solid #EEE;text-align:right;font-weight:600">${costReport.timeline}</td></tr>
+          <tr><td style="padding:5px 12px;border-bottom:1px solid #EEE;color:#888">Budget Tier</td><td style="padding:5px 12px;border-bottom:1px solid #EEE;text-align:right;font-weight:600">${params.budget}</td></tr>
+          <tr><td style="padding:5px 12px;color:#888">Floors</td><td style="padding:5px 12px;text-align:right;font-weight:600">${params.floors === 1 ? "Ground Floor" : params.floors === 2 ? "G+1 Duplex" : "G+2 Triple"}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>` : ""}
+
+  ${vastuReport?.violations?.length ? `
+  <div style="margin-bottom:20px">
+    <div class="section-title">Design Notes — ${vastuReport.violations.length} Item(s) to Review</div>
+    ${vastuReport.violations.slice(0,5).map(v => `<div style="padding:5px 0;border-bottom:1px solid #F5F5F5;font-size:9px"><span style="color:#D97706;font-weight:700">[${(v.severity||"note").toUpperCase()}]</span> ${v.rule} — ${v.fix}</div>`).join("")}
+  </div>` : ""}
+
+  <div class="footer">
+    <span>Generated by वास्तु AI · Architectural Design Platform</span>
+    <span>Ref: VASTU-${refNo} · ${date}</span>
+    <span>Preliminary estimate — actual costs may vary ±15%</span>
+  </div>
+</body></html>`;
+
     const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html><head><title>Floor Plan</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#fff}svg{max-width:100%;max-height:100vh;display:block}</style></head><body>${svgCode}</body></html>`);
+    win.document.write(html);
     win.document.close();
     win.focus();
-    setTimeout(() => win.print(), 400);
+    setTimeout(() => win.print(), 600);
   };
 
   // ── Tab definitions ────────────────────────────────────────────────────────
@@ -672,6 +841,9 @@ export default function App() {
           pointerEvents:'none',
         }}>{notification}</div>
       )}
+
+      {/* ── PDF Modal ── */}
+      {showPdfModal && <PdfModal onExport={exportPDF} onClose={() => setShowPdfModal(false)}/>}
 
       {/* ── Mobile drawer backdrop ── */}
       {isMobile && mobileDrawer && (
@@ -1025,7 +1197,7 @@ export default function App() {
       }}>
         {/* Header */}
         <div style={{
-          padding: "14px 14px 10px",
+          padding: "12px 14px 10px",
           borderBottom: "2px solid #1A1A28",
           background: "#060610",
         }}>
@@ -1034,6 +1206,21 @@ export default function App() {
           </div>
           <div style={{ fontSize: 9, color: "#555", marginTop: 4, fontFamily: "monospace" }}>
             {generating ? "Running…" : agentStatuses && Object.values(agentStatuses).some(s => s === "done") ? "Last run complete" : "Idle"}
+          </div>
+          {/* Auth pill */}
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            {user ? (
+              <>
+                <a href="/dashboard" style={{ fontSize: 8, color: "#4488FF", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 }}>
+                  ⊙ {user.email}
+                </a>
+                <button onClick={() => supabase.auth.signOut()} style={{ fontSize: 7, color: "#554444", background: "transparent", border: "none", cursor: "pointer", fontFamily: "monospace" }}>sign out</button>
+              </>
+            ) : (
+              <a href="/login" style={{ fontSize: 8, color: "#555", textDecoration: "none", letterSpacing: "0.05em" }}>
+                ← Sign in to save plans
+              </a>
+            )}
           </div>
         </div>
 
@@ -1169,7 +1356,7 @@ export default function App() {
                   borderRadius: 4, color: "#22AA44", fontSize: 14, cursor: "pointer", lineHeight: 1,
                 }}>📲</button>
               </div>
-              <button onClick={exportPDF} style={{
+              <button onClick={() => setShowPdfModal(true)} style={{
                 width: "100%", padding: "7px",
                 background: "transparent", border: "1px solid #2A1A2A",
                 borderRadius: 4, color: "#CC66FF", fontSize: 9, cursor: "pointer",
