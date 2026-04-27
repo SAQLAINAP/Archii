@@ -17,13 +17,18 @@ async function tryAnthropic(systemPrompt, userPrompt, maxTokens) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!isRealKey(key)) return null;
   const client = new Anthropic({ apiKey: key });
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: maxTokens,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  });
-  return message.content[0]?.text || "";
+  try {
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+    return message.content[0]?.text || "";
+  } catch (err) {
+    console.error("[Anthropic] Error:", err.message);
+    throw err;
+  }
 }
 
 async function tryGemini(systemPrompt, userPrompt, maxTokens) {
@@ -35,23 +40,33 @@ async function tryGemini(systemPrompt, userPrompt, maxTokens) {
     systemInstruction: systemPrompt,
     generationConfig: { maxOutputTokens: maxTokens },
   });
-  const result = await model.generateContent(userPrompt);
-  return result.response.text() || "";
+  try {
+    const result = await model.generateContent(userPrompt);
+    return result.response.text() || "";
+  } catch (err) {
+    console.error("[Gemini] Error:", err.message);
+    throw err;
+  }
 }
 
 async function tryGroq(systemPrompt, userPrompt, maxTokens) {
   const key = process.env.GROQ_API_KEY;
   if (!isRealKey(key)) return null;
   const client = new Groq({ apiKey: key });
-  const completion = await client.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    max_tokens: Math.min(maxTokens, 8000), // Groq cap
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-  });
-  return completion.choices[0]?.message?.content || "";
+  try {
+    const completion = await client.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      max_tokens: Math.min(maxTokens, 8000), // Groq cap
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+    return completion.choices[0]?.message?.content || "";
+  } catch (err) {
+    console.error("[Groq] Error:", err.message);
+    throw err;
+  }
 }
 
 async function tryNemotron(systemPrompt, userPrompt, maxTokens) {
@@ -92,10 +107,10 @@ async function tryNemotron(systemPrompt, userPrompt, maxTokens) {
 // ─── Fallback orchestrator ────────────────────────────────────────────────────
 
 const PROVIDERS = [
-  { name: "NVIDIA (Nemotron/GLM)",     fn: tryNemotron },
-  { name: "Anthropic (Claude Sonnet)", fn: tryAnthropic },
   { name: "Groq (Llama-3.3-70B)",      fn: tryGroq },
   { name: "Google (Gemini 2.0 Flash)", fn: tryGemini },
+  { name: "NVIDIA (Nemotron/GLM)",     fn: tryNemotron },
+  { name: "Anthropic (Claude Sonnet)", fn: tryAnthropic },
 ];
 
 export async function POST(request) {
@@ -113,13 +128,12 @@ export async function POST(request) {
     try {
       const result = await fn(systemPrompt, userPrompt, maxTokens);
       if (result !== null) {
-        // null means "key not configured" — skip silently
         return Response.json({ text: result, provider: name });
       }
     } catch (err) {
-      console.error(`[AI Fallback] ${name} failed:`, err.message);
+      const isOverloaded = err.status === 503 || err.message.includes("overloaded") || err.message.includes("rate_limit");
+      console.error(`[AI Fallback] ${name} ${isOverloaded ? "overloaded" : "failed"}:`, err.message);
       errors.push(`${name}: ${err.message}`);
-      // continue to next provider
     }
   }
 

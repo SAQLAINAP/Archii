@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import Groq from "groq-sdk";
 
 function isRealKey(key) {
   if (!key) return false;
@@ -14,40 +15,56 @@ export async function POST(request) {
     return Response.json({ error: "Missing prompts" }, { status: 400 });
   }
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!isRealKey(key)) {
-    return Response.json({ error: "Anthropic key not configured for streaming" }, { status: 503 });
+  const antKey = process.env.ANTHROPIC_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY;
+
+  if (isRealKey(antKey)) {
+    const client = new Anthropic({ apiKey: antKey });
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          const stream = client.messages.stream({
+            model: "claude-sonnet-4-5",
+            max_tokens: maxTokens,
+            system: systemPrompt,
+            messages: [{ role: "user", content: userPrompt }],
+          });
+          for await (const chunk of stream) {
+            if (chunk.type === "content_block_delta" && chunk.delta?.type === "text_delta") {
+              controller.enqueue(new TextEncoder().encode(chunk.delta.text));
+            }
+          }
+        } catch (e) { controller.error(e); }
+        controller.close();
+      },
+    });
+    return new Response(readable, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
 
-  const client = new Anthropic({ apiKey: key });
-
-  const readable = new ReadableStream({
-    async start(controller) {
-      try {
-        const stream = client.messages.stream({
-          model: "claude-sonnet-4-5",
-          max_tokens: maxTokens,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
-        });
-
-        for await (const chunk of stream) {
-          if (chunk.type === "content_block_delta" && chunk.delta?.type === "text_delta") {
-            controller.enqueue(new TextEncoder().encode(chunk.delta.text));
+  if (isRealKey(groqKey)) {
+    const client = new Groq({ apiKey: groqKey });
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          const stream = await client.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            max_tokens: Math.min(maxTokens, 8000),
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            stream: true,
+          });
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content || "";
+            if (content) controller.enqueue(new TextEncoder().encode(content));
           }
-        }
-      } catch (e) {
-        controller.error(e);
-      }
-      controller.close();
-    },
-  });
+        } catch (e) { controller.error(e); }
+        controller.close();
+      },
+    });
+    return new Response(readable, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
 
-  return new Response(readable, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache",
-      "X-Accel-Buffering": "no",
-    },
-  });
+  return Response.json({ error: "No valid keys for streaming" }, { status: 503 });
 }

@@ -113,27 +113,35 @@ function parseJSON(raw) {
 async function savePlanToSupabase(data) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
+    
+    const payload = {
+      plot_width: data.params.plotW,
+      plot_height: data.params.plotH,
+      bhk: data.params.bhk,
+      facing: data.params.facing,
+      city: data.params.city,
+      budget: data.params.budget,
+      svg_code: data.svgCode,
+      vastu_score: data.vastuReport?.score,
+      total_cost: data.costReport?.totalCost,
+      rooms: data.layout?.rooms,
+      vastu_report: data.vastuReport,
+      cost_report: data.costReport,
+      furniture_layout: data.furnitureData,
+      user_id: user?.id || null
+    };
+
     const { error } = await supabase
       .from('generated_plans')
-      .insert([{
-        user_id: user?.id ?? null,
-        plot_width: data.params.plotW,
-        plot_height: data.params.plotH,
-        bhk: data.params.bhk,
-        facing: data.params.facing,
-        city: data.params.city,
-        budget: data.params.budget,
-        svg_code: data.svgCode,
-        vastu_score: data.vastuReport?.score,
-        total_cost: data.costReport?.totalCost,
-        rooms: data.layout?.rooms,
-        vastu_report: data.vastuReport,
-        cost_report: data.costReport,
-        furniture_layout: data.furnitureData
-      }]);
-    if (error) console.error("Supabase Save Error:", error.message);
+      .insert([payload]);
+
+    if (error) {
+      console.warn("[Supabase] Save failed:", error.message);
+    } else {
+      console.log(`[Supabase] Plan saved successfully. ${user?.id ? `(User: ${user.email})` : "(Guest)"}`);
+    }
   } catch (err) {
-    console.error("Supabase Save Exception:", err);
+    console.error("[Supabase] Critical Save Exception:", err);
   }
 }
 
