@@ -1015,8 +1015,6 @@ export default function App() {
   };
   const beliefRuleCount = { vastu:"14", islamic:"12", christian:"12", universal:"12" };
   const TABS = [
-    { id:"plan",    label:"Floor Plan" },
-    { type:"sep" },
     { id:"vastu",   label: beliefTabLabel[params.belief] || "Vastu" },
     { id:"cost",    label:"Cost" },
     { id:"timeline",label:"Timeline" },
@@ -1132,7 +1130,7 @@ export default function App() {
               <button
                 key={mode}
                 title={title}
-                onClick={() => setGenMode(mode)}
+                onClick={() => { setGenMode(mode); setTab("plan"); }}
                 style={{
                   padding:"4px 10px", borderRadius:16, border:"none", cursor:"pointer",
                   fontSize:10, fontFamily:"monospace", fontWeight:700,
