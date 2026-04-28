@@ -448,6 +448,8 @@ export default function App() {
   const [notification, setNotify]     = useState('');
   const [showLabels, setShowLabels]   = useState(true);
   const [showSunPath, setShowSunPath] = useState(false);
+  const [genMode, setGenMode]         = useState("image"); // "image" | "svg"
+  const [imageUrl, setImageUrl]       = useState(null);
   const [parentLang, setParentLang]   = useState(null);
   const [parentExplanation, setParentExplanation] = useState(null);
   const [loadingExplanation, setLoadingExplanation] = useState(false);
@@ -573,6 +575,31 @@ export default function App() {
     }
     setLoadingExplanation(false);
   };
+
+  // ── Image generation mode ─────────────────────────────────────────────────
+  const generateImage = useCallback(async () => {
+    abortRef.current = false;
+    setGenerating(true);
+    setImageUrl(null);
+    setLog([]);
+    addLog("Image Gen: building vastu-compliant prompt…");
+    try {
+      const res = await fetch("/api/image-gen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setImageUrl(data.url);
+      setTab("plan");
+      addLog("Image Gen: ✓ floor plan image generated");
+    } catch (e) {
+      addLog(`Image Gen: ✗ ${e.message}`);
+    } finally {
+      setGenerating(false);
+    }
+  }, [params]);
 
   // ── Main generation pipeline ───────────────────────────────────────────────
   const generate = useCallback(async (refinementNote = "") => {
@@ -1041,7 +1068,7 @@ export default function App() {
         <Sidebar
           params={params}
           onParamChange={handleParamChange}
-          onGenerate={() => { generate(); setMobileDrawer(null); }}
+          onGenerate={() => { genMode === "image" ? generateImage() : generate(); setMobileDrawer(null); }}
           onGenerateAlts={generateAlts}
           onExportSVG={exportSVG}
           onExportPNG={exportPNG}
@@ -1092,10 +1119,41 @@ export default function App() {
               }}>{t.label}</button>
           )}
 
+          {/* Generation mode toggle */}
+          <div style={{
+            marginLeft:"auto", display:"flex", alignItems:"center",
+            background:"#0a0a1a", border:"1px solid #1e1e3a",
+            borderRadius:20, padding:3, gap:2, flexShrink:0,
+          }}>
+            {[
+              { mode:"image", label:"🖼 Image", color:"#44DD88", title:"GPT Image — Primary" },
+              { mode:"svg",   label:"〈/〉 SVG",  color:"#4488FF", title:"Agentic SVG — Beta" },
+            ].map(({ mode, label, color, title }) => (
+              <button
+                key={mode}
+                title={title}
+                onClick={() => setGenMode(mode)}
+                style={{
+                  padding:"4px 10px", borderRadius:16, border:"none", cursor:"pointer",
+                  fontSize:10, fontFamily:"monospace", fontWeight:700,
+                  background: genMode === mode ? `${color}22` : "transparent",
+                  color:      genMode === mode ? color : "#444",
+                  outline:    genMode === mode ? `1px solid ${color}55` : "none",
+                  transition:"all 0.15s",
+                  whiteSpace:"nowrap",
+                }}
+              >
+                {label}
+                {mode === "image" && <span style={{ marginLeft:4, fontSize:8, opacity:0.7 }}>PRIMARY</span>}
+                {mode === "svg"   && <span style={{ marginLeft:4, fontSize:8, opacity:0.6, color:"#FFAA22" }}>BETA</span>}
+              </button>
+            ))}
+          </div>
+
           {/* Mobile: controls button for right panel */}
           {isMobile && (
             <button onClick={() => setMobileDrawer(d => d==='right' ? null : 'right')} style={{
-              marginLeft:"auto", padding:"0 12px", background:"transparent", border:"none",
+              padding:"0 12px", background:"transparent", border:"none",
               color:"#666", fontSize:16, cursor:"pointer", flexShrink:0,
             }}>⚙</button>
           )}
@@ -1124,17 +1182,48 @@ export default function App() {
 
           {/* Floor Plan */}
           {tab==="plan" && !showDiff && (
-            <div style={{ flex:1, overflow:"hidden" }}>
-              <FloorPlanViewer
-                svgCode={svgCode}
-                furniture={furnitureData}
-                showFurniture={showFurniture}
-                loading={generating && !svgCode}
-                showLabels={showLabels}
-                showSunPath={showSunPath}
-                theme={theme}
-                city={params.city}
-              />
+            <div style={{ flex:1, overflow:"hidden", position:"relative" }}>
+              {genMode === "image" && imageUrl ? (
+                <div style={{
+                  width:"100%", height:"100%",
+                  display:"flex", flexDirection:"column",
+                  alignItems:"center", justifyContent:"center",
+                  background:"#080814", padding:16, overflow:"auto",
+                }}>
+                  <img
+                    src={imageUrl}
+                    alt="AI-generated floor plan"
+                    style={{ maxWidth:"100%", maxHeight:"100%", objectFit:"contain",
+                      borderRadius:8, boxShadow:"0 8px 48px rgba(68,221,136,0.15)" }}
+                  />
+                  <div style={{ marginTop:10, fontSize:9, color:"#444", fontFamily:"monospace" }}>
+                    GPT Image · {params.plotW}×{params.plotH}ft {params.bhk}BHK {params.facing}-facing
+                  </div>
+                </div>
+              ) : genMode === "image" && generating ? (
+                <div style={{
+                  width:"100%", height:"100%",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  background:"#080814",
+                }}>
+                  <div style={{ textAlign:"center", fontFamily:"monospace" }}>
+                    <div style={{ fontSize:28, marginBottom:12, animation:"pulse 1.5s infinite" }}>🖼</div>
+                    <div style={{ fontSize:11, color:"#44DD88" }}>Generating floor plan image…</div>
+                    <div style={{ fontSize:9, color:"#444", marginTop:6 }}>GPT Image · this takes ~15–30s</div>
+                  </div>
+                </div>
+              ) : (
+                <FloorPlanViewer
+                  svgCode={svgCode}
+                  furniture={furnitureData}
+                  showFurniture={showFurniture}
+                  loading={generating && !svgCode}
+                  showLabels={showLabels}
+                  showSunPath={showSunPath}
+                  theme={theme}
+                  city={params.city}
+                />
+              )}
             </div>
           )}
 
