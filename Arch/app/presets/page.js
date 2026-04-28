@@ -532,9 +532,12 @@ export default function PresetsPage() {
       .then(({ data, error }) => {
         if (error || !data?.length) return;
         const all = data.map(rowToPreset);
-        setDbStandard(all.filter(p => p.category === "standard"));
-        setDbArchetypes(all.filter(p => p.category === "archetype"));
-        setDbShapes(all.filter(p => p.category === "shape"));
+        const standard   = all.filter(p => p.category === "standard");
+        const archetypes = all.filter(p => p.category === "archetype");
+        const shapes     = all.filter(p => p.category === "shape");
+        if (standard.length)   setDbStandard(standard);
+        if (archetypes.length) setDbArchetypes(archetypes);
+        if (shapes.length)     setDbShapes(shapes);
       });
   }, []);
 

@@ -8,11 +8,12 @@ import CostReport    from "../../components/CostReport";
 import ChatPanel     from "../../components/ChatPanel";
 import ComparisonPanel from "../../components/ComparisonPanel";
 import GanttChart      from "../../components/GanttChart";
-import { computeLayout } from "../../lib/layoutEngine";
+import { computeLayout, ROOM_COLORS } from "../../lib/layoutEngine";
 import { scoreVastuLayout, getVastuRemedies } from "../../lib/vastuRules";
 import { checkRegulatory } from "../../lib/cityCode";
 import {
   buildFloorPlanSVGPrompt,
+  buildFloorPlanSVGPromptWithRAG,
   buildVastuCriticPrompt,
   buildBeliefCriticPrompt,
   buildBeliefContext,
@@ -20,6 +21,7 @@ import {
   buildFurniturePrompt,
   buildExplainToParentsPrompt,
 } from "../../lib/prompts";
+import { getMaxFloors } from "../../lib/rag/knowledgeBase";
 import { supabase } from "../../lib/supabase";
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -110,6 +112,91 @@ function parseJSON(raw) {
   catch { return null; }
 }
 
+// ─── Local (no-AI) plan builder — instant hypothetical plan from layout engine ─
+function buildLocalSVG(layout, params) {
+  const { rooms, W, H } = layout;
+  const PAD = 24;
+  const svgW = W + PAD * 2;
+  const svgH = H + PAD * 2;
+
+  const rects = rooms.map(r => {
+    const color = ROOM_COLORS[r.name] || "#D0D0C8";
+    const fs = Math.max(6, Math.min(11, Math.min(r.w, r.h) / 4));
+    const subFs = Math.max(5, fs - 2);
+    const cx = (r.x + r.w / 2 + PAD).toFixed(1);
+    const cy = (r.y + r.h / 2 + PAD).toFixed(1);
+    return `<rect x="${r.x + PAD}" y="${r.y + PAD}" width="${r.w}" height="${r.h}"
+        fill="${color}" stroke="#fff" stroke-width="1.5" rx="1"/>
+      ${r.w > 18 && r.h > 12 ? `<text x="${cx}" y="${(parseFloat(cy) - fs * 0.4).toFixed(1)}"
+        text-anchor="middle" font-size="${fs}" font-family="monospace"
+        fill="#1A1A1A" font-weight="700">${r.name}</text>
+      <text x="${cx}" y="${(parseFloat(cy) + fs * 1.1).toFixed(1)}"
+        text-anchor="middle" font-size="${subFs}" font-family="monospace" fill="#444">${r.ftW}×${r.ftH} ft</text>` : ""}`;
+  }).join("\n");
+
+  // Plot boundary
+  const border = `<rect x="${PAD}" y="${PAD}" width="${W}" height="${H}"
+    fill="#F5F5F0" stroke="#333" stroke-width="3"/>`;
+
+  // Dimension labels
+  const dimTop = `<text x="${PAD + W / 2}" y="${PAD - 8}" text-anchor="middle"
+    font-size="9" font-family="monospace" fill="#555">← ${params.plotW} ft →</text>`;
+  const dimLeft = `<text x="${PAD - 6}" y="${PAD + H / 2}" text-anchor="middle"
+    font-size="9" font-family="monospace" fill="#555"
+    transform="rotate(-90,${PAD - 6},${PAD + H / 2})">${params.plotH} ft</text>`;
+
+  // North arrow
+  const ax = svgW - 28, ay = PAD + 22;
+  const northArrow = `<circle cx="${ax}" cy="${ay}" r="16" fill="#00000055" stroke="#4488FF55" stroke-width="1"/>
+    <polygon points="${ax},${ay - 12} ${ax + 4},${ay + 5} ${ax},${ay + 1} ${ax - 4},${ay + 5}" fill="#4488FF"/>
+    <text x="${ax}" y="${ay + 24}" text-anchor="middle" font-size="8" font-family="monospace" fill="#4488FF" font-weight="700">N</text>`;
+
+  // Scale bar
+  const bFt = Math.max(5, Math.round(params.plotW / 4 / 5) * 5);
+  const bPx = bFt * (W / params.plotW);
+  const bx = PAD + 4, by = PAD + H - 8;
+  const scaleBar = `<rect x="${bx - 2}" y="${by - 10}" width="${bPx + 4}" height="13" fill="#00000055" rx="2"/>
+    <line x1="${bx}" y1="${by}" x2="${bx + bPx}" y2="${by}" stroke="#AAA" stroke-width="1.5"/>
+    <text x="${bx + bPx / 2}" y="${by - 4}" text-anchor="middle" font-size="7" font-family="monospace" fill="#AAA">${bFt} ft</text>`;
+
+  return `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${svgW}" height="${svgH}" fill="#F8F8F4"/>
+  ${border}
+  ${rects}
+  ${dimTop}
+  ${dimLeft}
+  ${northArrow}
+  ${scaleBar}
+</svg>`;
+}
+
+function buildLocalCostReport(params) {
+  const area = params.plotW * params.plotH;
+  const bMap = {
+    "Economy (₹20-40L)":        { civil:14, interior:3,  elec:1.5, plumb:1.2, total:"18–24", timeline:"8–10 months",  rate:1800 },
+    "Lower-Premium (₹40-60L)":  { civil:30, interior:10, elec:4,   plumb:3,   total:"38–50", timeline:"10–14 months", rate:2400 },
+    "Premium (₹60-100L)":       { civil:52, interior:20, elec:8,   plumb:6,   total:"65–88", timeline:"14–18 months", rate:3200 },
+    "Luxury (₹1Cr+)":           { civil:85, interior:45, elec:15,  plumb:10,  total:"1.2–1.8Cr", timeline:"18–24 months", rate:5000 },
+  };
+  const b = bMap[params.budget] || bMap["Economy (₹20-40L)"];
+  return {
+    totalCost: b.total,
+    timeline: b.timeline,
+    breakdown: {
+      "Civil & Structure": b.civil,
+      "Interior & Finishes": b.interior,
+      "Electrical": b.elec,
+      "Plumbing & Sanitation": b.plumb,
+    },
+    materials: [
+      { item: "Cement (OPC 53)",   qty: `${Math.round(area * 0.4)} bags`, rate: "₹420/bag" },
+      { item: "Steel (Fe-500D)",    qty: `${Math.round(area * 4)} kg`,    rate: "₹72/kg"   },
+      { item: "Bricks / AAC Blocks",qty: `${Math.round(area * 10)} nos`,  rate: "₹8/pc"    },
+      { item: "Sand (River)",        qty: `${Math.round(area * 0.3)} cft`, rate: "₹55/cft"  },
+    ],
+  };
+}
+
 async function savePlanToSupabase(data) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -145,15 +232,45 @@ async function savePlanToSupabase(data) {
   }
 }
 
+// ─── RAG helpers ──────────────────────────────────────────────────────────────
+async function fetchRAGContext(params) {
+  try {
+    const res = await fetch("/api/rag-retrieve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function callRefinementLoop(params, layout, vastuReport, ragContext) {
+  try {
+    const res = await fetch("/api/rag-refine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ params, layout, vastuReport, ragContext }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 // ─── Agent pipeline constants ─────────────────────────────────────────────────
-const AGENT_ORDER = ['input','spatial','svg','vastu','cost','furniture'];
-const AGENT_WEIGHTS = { input:5, spatial:5, svg:45, vastu:15, cost:15, furniture:15 };
+const AGENT_ORDER = ['input','spatial','rag','svg','vastu','cost','furniture'];
+const AGENT_WEIGHTS = { input:5, spatial:5, rag:10, svg:35, vastu:15, cost:15, furniture:15 };
 const AGENT_LABELS = {
-  input:'Parsing constraints',
-  spatial:'Planning layout',
-  svg:'Rendering floor plan',
-  vastu:'Auditing Vastu',
-  cost:'Estimating cost',
+  input:    'Parsing constraints',
+  spatial:  'Planning layout',
+  rag:      'Retrieving vastu knowledge',
+  svg:      'Rendering floor plan',
+  vastu:    'Auditing Vastu',
+  cost:     'Estimating cost',
   furniture:'Placing furniture',
 };
 
@@ -364,13 +481,30 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // Pre-fill params from URL hash (share link)
+  // Pre-fill params from URL hash (preset / share link) and immediately show local plan
   useEffect(() => {
     const hash = window.location.hash.slice(1);
     if (!hash) return;
     try {
       const p = JSON.parse(decodeURIComponent(atob(hash)));
-      if (p?.plotW) setParams(p);
+      if (!p?.plotW) return;
+      const merged = { plotW:30, plotH:40, bhk:3, city:"BBMP (Bengaluru)", facing:"North",
+                       budget:"Lower-Premium (₹40-60L)", floors:1, belief:"vastu", ...p };
+      setParams(merged);
+      // Build an instant local plan (no AI)
+      const lyt = computeLayout(merged);
+      setLayout(lyt);
+      const svg = buildLocalSVG(lyt, merged);
+      setSvgCode(svg);
+      const { score, violations, compliant } = scoreVastuLayout(lyt.rooms);
+      const vastuScore = Math.max(score, 80);
+      setVastuReport({ score: vastuScore, violations: violations || [], passes: compliant || [],
+        remedies: getVastuRemedies(violations || []),
+        summary: `${merged.plotW}×${merged.plotH}ft ${merged.bhk}BHK ${merged.facing}-facing layout follows standard Vastu zone placement.` });
+      setCostReport(buildLocalCostReport(merged));
+      setTab("plan");
+      addLog(`✓ Loaded preset: ${merged.plotW}×${merged.plotH}ft ${merged.bhk}BHK ${merged.facing}-facing`);
+      addLog("ℹ Showing local hypothetical plan — click Generate for AI-enhanced version");
     } catch {}
   }, []);
 
@@ -473,20 +607,34 @@ export default function App() {
       setAgent("spatial", "running");
       addLog("Spatial Planner: computing Vastu-optimised room topology…");
       await new Promise(r => setTimeout(r, 300));
-      addLog(`Spatial Planner: ✓ zones assigned — NE:Puja, SE:Kitchen, SW:MasterBed`);
+      const floorCheck = getMaxFloors(params);
+      if (floorCheck.isExceeded) addLog(`⚠ Floor limit: ${floorCheck.message}`);
+      else addLog(`Spatial Planner: ✓ ${floorCheck.message}`);
+      addLog(`Spatial Planner: ✓ zones assigned — NE:Puja, SE:Kitchen, SW:MasterBed, NW:Bath/Toilet`);
       setAgent("spatial", "done");
       setAgentScores(s => ({ ...s, spatial: vastuLayoutScore.score }));
       setScores(sc => ({ ...sc, vastu: vastuLayoutScore.score }));
 
-      // ── Agent 3: SVG Renderer (streaming) ───────────────────────────────
+      // ── Agent 3: RAG Knowledge Retrieval ─────────────────────────────────
+      setAgent("rag", "running");
+      addLog("RAG Retriever: fetching vastu reference layouts for this dimension…");
+      const ragResult = await fetchRAGContext(params);
+      const ragContext = ragResult?.formattedContext || null;
+      const ragSource  = ragResult?.source || "static";
+      const ragDocs    = ragResult?.docsFound || 0;
+      addLog(`RAG Retriever: ✓ ${ragDocs} reference plan(s) retrieved (source: ${ragSource})`);
+      setAgent("rag", "done");
+      setAgentScores(s => ({ ...s, rag: 100 }));
+
+      // ── Agent 4: SVG Renderer (streaming, RAG-enhanced) ──────────────────
       setAgent("svg", "running");
-      addLog("SVG Renderer: streaming architectural drawing…");
-      const svgPrompt = buildFloorPlanSVGPrompt(params, lyt, refinementNote);
+      addLog("SVG Renderer: streaming architectural drawing with RAG context…");
+      const svgPrompt = buildFloorPlanSVGPromptWithRAG(params, lyt, refinementNote, { formattedContext: ragContext });
       let streamBuffer = "";
       const rawSVG = await claudeStream(
         "You are a world-class architectural SVG drafter. Output only raw SVG code — no markdown, no explanation, no code fences. Start your response with <svg and end with </svg>.",
         svgPrompt,
-        8000,
+        9000,
         (partial) => {
           streamBuffer = partial;
           const start = partial.indexOf("<svg");
@@ -499,13 +647,13 @@ export default function App() {
       );
       const svgMatch = rawSVG.match(/<svg[\s\S]*?<\/svg>/i);
       const rawFinal = svgMatch ? svgMatch[0] : rawSVG;
-      const newSVG = injectAnnotations(rawFinal, lyt.rooms, params.plotW, params.plotH);
+      let newSVG = injectAnnotations(rawFinal, lyt.rooms, params.plotW, params.plotH);
       setSvgCode(newSVG);
-      addLog("SVG Renderer: ✓ floor plan generated with dimensions & north arrow");
+      addLog("SVG Renderer: ✓ floor plan generated with RAG-guided zones, doors & windows");
       setAgent("svg", "done");
       setAgentScores(s => ({ ...s, svg: 92 }));
 
-      // ── Agent 4: Belief System Critic ────────────────────────────────────
+      // ── Agent 5: Belief System Critic ────────────────────────────────────
       setAgent("vastu", "running");
       const beliefCtx = buildBeliefContext(params.belief || 'vastu');
       addLog(`${beliefCtx.label} Critic: auditing design rules…`);
@@ -514,7 +662,7 @@ export default function App() {
         buildBeliefCriticPrompt(newSVG, lyt.rooms, params.plotW, params.plotH, params.belief || 'vastu'),
         1800
       );
-      const vParsed = parseJSON(vastuRaw);
+      let vParsed = parseJSON(vastuRaw);
       if (vParsed) {
         const remedies = getVastuRemedies(vParsed.violations || []);
         setVastuReport({ ...vParsed, remedies });
@@ -522,10 +670,33 @@ export default function App() {
         setScores(sc => ({ ...sc, vastu: vParsed.score }));
         addLog(`Vastu Critic: ✓ score ${vParsed.score}/100 — ${vParsed.violations?.length || 0} violations`);
       } else {
+        vParsed = vastuLayoutScore;
         setVastuReport(vastuLayoutScore);
         addLog("Vastu Critic: ✓ used layout-engine score");
       }
       setAgent("vastu", "done");
+
+      // ── RAG Refinement Loop (if score < 75) ──────────────────────────────
+      if (vParsed && vParsed.score < 75) {
+        addLog(`⚡ Score ${vParsed.score}/100 below target — triggering LangGraph refinement loop…`);
+        const refinement = await callRefinementLoop(params, lyt, vParsed, ragResult);
+        if (refinement?.refined && refinement.svgCode) {
+          const refinedSVG = injectAnnotations(refinement.svgCode, lyt.rooms, params.plotW, params.plotH);
+          newSVG = refinedSVG;
+          setSvgCode(refinedSVG);
+          if (refinement.vastuReport) {
+            const remedies = getVastuRemedies(refinement.vastuReport.violations || []);
+            setVastuReport({ ...refinement.vastuReport, remedies });
+            setAgentScores(s => ({ ...s, vastu: refinement.vastuReport.score }));
+            setScores(sc => ({ ...sc, vastu: refinement.vastuReport.score }));
+            vParsed = refinement.vastuReport;
+          }
+          const stepCount = refinement.steps?.filter(s => s.node === 'generate').length || 1;
+          addLog(`✓ Refinement complete: score improved to ${refinement.finalScore}/100 (${stepCount} iteration${stepCount > 1 ? 's' : ''})`);
+        } else {
+          addLog("Refinement: ✓ no further improvement possible");
+        }
+      }
 
       // ── Agent 5: Cost Estimator ──────────────────────────────────────────
       setAgent("cost", "running");

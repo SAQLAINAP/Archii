@@ -1,6 +1,111 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+
+/** Hero headline: cycling prefix (Vastu, Mīmārī, Christian, municipal / codes). */
+const HERO_PREFIX_WORDS = [
+  { text: "Vastu", color: "#E8E8F4" },
+  { text: "Mīmārī", color: "#44DD88" },
+  { text: "Christian", color: "#88BBFF" },
+  { text: "BBMP", color: "#F0E040" },
+  { text: "GHMC", color: "#44DD88" },
+  { text: "PCMC", color: "#66AAFF" },
+  { text: "BDA", color: "#CC88FF" },
+  { text: "Municipal", color: "#AAAACC" },
+  { text: "NBC", color: "#FFAA66" },
+];
+
+const HERO_METER_HOLD_MS = 2600;
+const HERO_METER_SLIDE_MS = 480;
+
+function HeroMeterWord({ words }) {
+  const [index, setIndex] = useState(0);
+  const [sliding, setSliding] = useState(false);
+
+  const longest = useMemo(
+    () => words.reduce((a, b) => (a.text.length >= b.text.length ? a : b), words[0]),
+    [words],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    let tHold;
+    let tSlide;
+
+    const schedule = () => {
+      tHold = setTimeout(() => {
+        if (cancelled) return;
+        setSliding(true);
+        tSlide = setTimeout(() => {
+          if (cancelled) return;
+          setIndex((i) => (i + 1) % words.length);
+          setSliding(false);
+          schedule();
+        }, HERO_METER_SLIDE_MS);
+      }, HERO_METER_HOLD_MS);
+    };
+
+    schedule();
+    return () => {
+      cancelled = true;
+      clearTimeout(tHold);
+      clearTimeout(tSlide);
+    };
+  }, [words.length]);
+
+  const cur = words[index];
+  const next = words[(index + 1) % words.length];
+  const glow = (c) => `0 0 36px ${c}40, 0 0 72px ${c}1a`;
+
+  const layerColor = (c) => ({
+    color: c.color,
+    textShadow: glow(c.color),
+  });
+
+  return (
+    <span
+      className="hero-meter-slot"
+      style={{
+        position: "relative",
+        display: "inline-block",
+        verticalAlign: "baseline",
+        overflow: "hidden",
+        lineHeight: "inherit",
+      }}
+    >
+      {/* In-flow strut: same line box as rest of h1; width = longest label so hyphen stays fixed */}
+      <span
+        aria-hidden
+        style={{
+          visibility: "hidden",
+          pointerEvents: "none",
+          userSelect: "none",
+          fontWeight: 900,
+        }}
+      >
+        {longest.text}
+      </span>
+      {!sliding && (
+        <span
+          className="hero-meter-layer hero-meter-rest"
+          style={layerColor(cur)}
+        >
+          {cur.text}
+        </span>
+      )}
+      {sliding && (
+        <>
+          <span className="hero-meter-layer hero-meter-out" style={layerColor(cur)}>
+            {cur.text}
+          </span>
+          <span className="hero-meter-layer hero-meter-in" style={layerColor(next)}>
+            {next.text}
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
 
 export default function LandingPage() {
   const router = useRouter();
@@ -214,6 +319,35 @@ export default function LandingPage() {
           0%, 100% { opacity: 0.3; transform: scale(1); }
           50%       { opacity: 1;   transform: scale(1.5); }
         }
+        .hero-meter-layer {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          white-space: nowrap;
+          font-weight: 900;
+          font-size: inherit;
+          line-height: inherit;
+        }
+        .hero-meter-rest {
+          transform: translateY(0);
+          opacity: 1;
+        }
+        @keyframes heroMeterOut {
+          from { transform: translateY(0); opacity: 1; }
+          to { transform: translateY(-115%); opacity: 0; }
+        }
+        @keyframes heroMeterIn {
+          from { transform: translateY(115%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .hero-meter-out {
+          animation: heroMeterOut 0.48s cubic-bezier(0.45, 0, 0.15, 1) forwards;
+        }
+        .hero-meter-in {
+          animation: heroMeterIn 0.48s cubic-bezier(0.45, 0, 0.15, 1) forwards;
+        }
         .cta-btn {
           display: inline-flex;
           align-items: center;
@@ -352,7 +486,7 @@ export default function LandingPage() {
           MULTI-AGENT AI · 4-PROVIDER FALLBACK · VASTU + MUNICIPAL CODE
         </div>
 
-        {/* Main headline */}
+        {/* Main headline — meter slot: word rolls up, next rises from below */}
         <h1 style={{
           fontSize: "clamp(38px, 6vw, 72px)",
           fontWeight: 900,
@@ -360,9 +494,10 @@ export default function LandingPage() {
           letterSpacing: "-0.02em",
           margin: "0 0 20px",
           animation: "fadeUp 0.7s ease 0.1s both",
-          maxWidth: 820,
+          maxWidth: 900,
         }}>
-          <span style={{ color: "#E8E8F4" }}>Vastu-Compliant </span>
+          <HeroMeterWord words={HERO_PREFIX_WORDS} />
+          <span style={{ color: "#E8E8F4" }}>-Compliant </span>
           <span style={{
             background: "linear-gradient(135deg, #4488FF, #44DD88)",
             WebkitBackgroundClip: "text",

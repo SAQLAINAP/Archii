@@ -1,3 +1,98 @@
+// ─── RAG-Enhanced SVG Prompt ──────────────────────────────────────────────────
+// Drop-in replacement for buildFloorPlanSVGPrompt with RAG context, improved
+// door/window/staircase instructions, and explicit vastu zone enforcement.
+export function buildFloorPlanSVGPromptWithRAG(params, layout, strategy = "", ragContext = null, refinementHint = "") {
+  const basePrompt = buildFloorPlanSVGPrompt(params, layout, strategy);
+  const ragSection = ragContext?.formattedContext || "";
+  const refineSection = refinementHint
+    ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n## REFINEMENT INSTRUCTIONS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${refinementHint}\n`
+    : "";
+
+  // Build explicit zone enforcement from layout rooms
+  const zoneEnforcement = layout.rooms
+    .map(r => `  • ${r.name} → MUST be in ${r.vastu} zone (x≈${r.x}, y≈${r.y})`)
+    .join("\n");
+
+  const zoneSection = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## VASTU ZONE ENFORCEMENT (MANDATORY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+These zones are PRE-COMPUTED and CORRECT. Do NOT move rooms to different zones:
+${zoneEnforcement}
+
+CRITICAL VASTU RULES for ${params.facing}-facing layout:
+  • Puja/Prayer → NE corner (top-right) — NEVER move this
+  • Master Bed → SW corner (bottom-left) — NEVER move this
+  • Kitchen → SE corner (bottom-right) — NEVER move this
+  • Bathroom/Toilet → NW zone (top-left) — NEVER place in NE
+  • Staircase (if present) → SW or W zone only
+  • Center (Brahmasthan) → Keep as open Corridor — no heavy walls
+`;
+
+  // Staircase instructions (only if staircase room exists)
+  const hasStaircase = layout.rooms.some(r => r.name === "Staircase");
+  const staircaseSection = hasStaircase ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## STAIRCASE NOTATION (MANDATORY for Staircase room)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Draw the Staircase room with proper architectural notation:
+1. Fill room with color as usual
+2. Draw 12 horizontal step lines evenly spaced inside the room:
+   for i in 0..11: <line x1="[room_x+4]" y1="[room_y + i*(room_h/12)]" x2="[room_x+room_w-4]" y2="[room_y + i*(room_h/12)]" stroke="#555555" stroke-width="1.2"/>
+3. Draw a bold railing line along the left wall: <line x1="[room_x+4]" y1="[room_y]" x2="[room_x+4]" y2="[room_y+room_h]" stroke="#333" stroke-width="3"/>
+4. Add "UP" text with arrow at bottom of room: <text ...>↑ UP</text>
+5. Add step count: <text ...>12 STEPS</text> at top of room
+6. NO door arc for staircase room — steps fill the opening
+` : "";
+
+  // Topology-based door wall hints
+  const { bldX, bldY, bldW, bldH } = layout;
+  const centerX = bldX + bldW / 2;
+  const centerY = bldY + bldH / 2;
+  const topologyDoorHints = layout.rooms
+    .filter(r => !["Corridor", "Utility", "Staircase"].includes(r.name))
+    .map(r => {
+      const rx = r.x + r.w / 2;
+      const ry = r.y + r.h / 2;
+      // Door goes on the wall closest to corridor center
+      const dx = rx - centerX;
+      const dy = ry - centerY;
+      let doorWall;
+      if (r.name === "Puja") doorWall = "left";       // Puja door always faces East/corridor
+      else if (r.name === "Kitchen") doorWall = "top"; // Kitchen door toward corridor
+      else if (Math.abs(dy) > Math.abs(dx)) doorWall = dy < 0 ? "bottom" : "top";
+      else doorWall = dx < 0 ? "right" : "left";
+      return `  • ${r.name}: door on ${doorWall} wall`;
+    }).join("\n");
+
+  const topologySection = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## TOPOLOGY-BASED DOOR PLACEMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use these door walls (pointing toward the central corridor):
+${topologyDoorHints}
+Kitchen door: NEVER directly opposite bathroom/toilet door.
+Puja room door: opens EAST (left wall of puja room).
+`;
+
+  // Vastu-aware window hints
+  const windowSection = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## VASTU-AWARE WINDOW PLACEMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Place windows on EXTERIOR walls only, per vastu:
+  • Living room → North and East walls (large windows for light + prosperity)
+  • Kitchen → East wall MANDATORY (cook faces East)
+  • Puja → East wall (morning sunlight, sacred)
+  • Master Bedroom (SW) → South and West walls ONLY
+  • Secondary Bedrooms (W/E zones) → same-facing exterior wall
+  • Bathrooms/Toilets → North or West wall (ventilation, never East)
+  • Do NOT place windows on walls shared between two rooms
+`;
+
+  return basePrompt + zoneSection + topologySection + windowSection + staircaseSection + ragSection + refineSection;
+}
+
 export function buildFloorPlanSVGPrompt(params, layout, strategy = "") {
   const { plotW, plotH, bhk, city, facing, budget } = params;
   const { rooms, W, H, bldX, bldY, bldW, bldH, OUTER, setbacks, entrance, scale } = layout;

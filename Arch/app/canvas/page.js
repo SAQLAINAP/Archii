@@ -14,6 +14,74 @@ const ROOM_BORDER = [
 
 const GRID = 30; // px per grid cell
 
+/** Selector + copy for canvas / analyser (methodology matches API `belief`). */
+const BELIEF_OPTIONS = [
+  {
+    id: "vastu",
+    label: "Vastu Shastra",
+    color: "#F0E040",
+    navTitle: "वास्तु",
+    navAccent: "#F0E040",
+    tagline: "Draw · Label · Analyse Vastu Shastra compliance",
+    panelTitle: "Vastu Shastra analysis",
+    scoreLabel: "VASTU SCORE",
+    idleBlurb:
+      "Draw rooms on the canvas, label them (e.g. Kitchen, Master Bedroom), then submit for Vastu Shastra compliance analysis.",
+    stepSubmit: "Submit for an instant Vastu Shastra audit",
+    loadingDetail: "Checking directional and zone rules · Mapping cardinal sectors",
+    idleGlyph: "ॐ",
+  },
+  {
+    id: "islamic",
+    label: "Islāmī Mīmārī",
+    color: "#44DD88",
+    navTitle: "Islāmī",
+    navAccent: "#44DD88",
+    tagline: "Draw · Label · Analyse Islamic residential design compliance",
+    panelTitle: "Islāmī Mīmārī analysis",
+    scoreLabel: "ISLAMIC DESIGN SCORE",
+    idleBlurb:
+      "Draw rooms on the canvas, label them (e.g. Musalla, Majlis, Courtyard), then submit for Islamic residential design analysis (Qibla, privacy, courtyard logic).",
+    stepSubmit: "Submit for an instant Islamic design audit",
+    loadingDetail: "Applying Qibla and mahram privacy zones · Courtyard and circulation checks",
+    idleGlyph: "☪",
+  },
+  {
+    id: "christian",
+    label: "Sacred Christian",
+    color: "#4488FF",
+    navTitle: "Sacred",
+    navAccent: "#4488FF",
+    tagline: "Draw · Label · Analyse sacred Christian spatial harmony",
+    panelTitle: "Sacred Christian analysis",
+    scoreLabel: "SACRED DESIGN SCORE",
+    idleBlurb:
+      "Draw rooms on the canvas, label them, then submit for analysis aligned with Christian domestic and sacred-space sensibilities.",
+    stepSubmit: "Submit for an instant sacred Christian design audit",
+    loadingDetail: "Reviewing hospitality, rest, and focal spaces · Light and axis symbolism",
+    idleGlyph: "✝",
+  },
+  {
+    id: "universal",
+    label: "Universal",
+    color: "#888899",
+    navTitle: "Universal",
+    navAccent: "#AAAAB8",
+    tagline: "Draw · Label · Analyse inclusive universal design",
+    panelTitle: "Universal design analysis",
+    scoreLabel: "UNIVERSAL SCORE",
+    idleBlurb:
+      "Draw rooms on the canvas, label them, then submit for accessibility, safety, daylight, and circulation analysis.",
+    stepSubmit: "Submit for an instant universal-design audit",
+    loadingDetail: "Checking accessibility, safety, daylight, and circulation patterns",
+    idleGlyph: "◇",
+  },
+];
+
+function beliefMeta(id) {
+  return BELIEF_OPTIONS.find(b => b.id === id) || BELIEF_OPTIONS[0];
+}
+
 // ── Score gauge (SVG circle) ──────────────────────────────────────────────────
 function ScoreGauge({ score }) {
   const r = 44;
@@ -135,6 +203,12 @@ export default function CanvasPage() {
   const [analysisState, setAnalysisState] = useState("idle"); // idle | loading | done | error
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+
+  const selectedBelief = beliefMeta(belief);
+  const panelBelief =
+    analysisState === "done" && result?.belief != null
+      ? beliefMeta(result.belief)
+      : selectedBelief;
 
   // Canvas dimensions
   const CW = 600, CH = 450;
@@ -523,8 +597,8 @@ export default function CanvasPage() {
             ← Back
           </button>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontSize: 20, color: "#E8E8F4", fontFamily: "Georgia, serif" }}>वास्तु</span>
-            <span style={{ fontSize: 20, color: "#F0E040", fontFamily: "Georgia, serif", fontWeight: 700 }}>AI</span>
+            <span style={{ fontSize: 20, color: "#E8E8F4", fontFamily: "Georgia, serif" }}>{selectedBelief.navTitle}</span>
+            <span style={{ fontSize: 20, color: selectedBelief.navAccent, fontFamily: "Georgia, serif", fontWeight: 700 }}>AI</span>
           </div>
         </div>
 
@@ -567,7 +641,7 @@ export default function CanvasPage() {
               Floor Plan Canvas
             </h1>
             <p style={{ margin: 0, fontSize: 12, color: "#44446A", fontFamily: "monospace" }}>
-              Draw · Label · Analyse Vastu Compliance
+              {selectedBelief.tagline}
             </p>
           </div>
         </div>
@@ -691,12 +765,7 @@ export default function CanvasPage() {
             <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
               {/* Belief system selector */}
               <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-                {[
-                  { id:"vastu",     label:"Vastu Shastra", color:"#F0E040" },
-                  { id:"islamic",   label:"Islāmī Mīmārī", color:"#44DD88" },
-                  { id:"christian", label:"Sacred Christian", color:"#4488FF" },
-                  { id:"universal", label:"Universal",     color:"#888899" },
-                ].map(b => (
+                {BELIEF_OPTIONS.map(b => (
                   <button key={b.id} onClick={() => setBelief(b.id)} style={{
                     padding: "5px 12px", borderRadius: 16,
                     border: `1px solid ${belief === b.id ? b.color+"80" : "#2A2A4A"}`,
@@ -743,7 +812,7 @@ export default function CanvasPage() {
               >
                 {analysisState === "loading"
                   ? "Analysing…"
-                  : `Submit for Vastu Analysis${rooms.length > 0 ? ` (${rooms.length} room${rooms.length !== 1 ? "s" : ""})` : ""}`}
+                  : `Submit for ${selectedBelief.label} analysis${rooms.length > 0 ? ` (${rooms.length} room${rooms.length !== 1 ? "s" : ""})` : ""}`}
               </button>
 
               {rooms.length === 0 && (
@@ -812,7 +881,7 @@ export default function CanvasPage() {
                 animation: analysisState === "loading" ? "pulse 1s ease-in-out infinite" : "none",
               }} />
               <span style={{ fontSize: 13, fontWeight: 700, color: "#C0C0DC" }}>
-                Vastu Analysis
+                {panelBelief.panelTitle}
               </span>
               {result?.provider && (
                 <span style={{
@@ -840,13 +909,13 @@ export default function CanvasPage() {
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 32, marginBottom: 4,
                   }}>
-                    ॐ
+                    {selectedBelief.idleGlyph}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "#6668A0" }}>
                     Awaiting your floor plan
                   </div>
                   <div style={{ fontSize: 12, color: "#33335A", lineHeight: 1.7, maxWidth: 280, fontFamily: "monospace" }}>
-                    Draw rooms on the canvas, label them (e.g. Kitchen, Master Bedroom), then submit for Vastu analysis.
+                    {selectedBelief.idleBlurb}
                   </div>
                   <div style={{
                     marginTop: 12, display: "flex", flexDirection: "column", gap: 8,
@@ -856,7 +925,7 @@ export default function CanvasPage() {
                       { icon: "①", text: "Draw room rectangles on the canvas" },
                       { icon: "②", text: "Label each room with its purpose" },
                       { icon: "③", text: "Set your plot dimensions" },
-                      { icon: "④", text: "Submit for instant Vastu audit" },
+                      { icon: "④", text: selectedBelief.stepSubmit },
                     ].map(step => (
                       <div key={step.icon} style={{
                         display: "flex", gap: 10, alignItems: "flex-start",
@@ -891,7 +960,7 @@ export default function CanvasPage() {
                       Analysing your floor plan…
                     </div>
                     <div style={{ fontSize: 11, color: "#33335A", fontFamily: "monospace" }}>
-                      Checking 14 Vastu rules · Mapping cardinal zones
+                      {selectedBelief.loadingDetail}
                     </div>
                   </div>
                 </div>
@@ -941,7 +1010,7 @@ export default function CanvasPage() {
                     <ScoreGauge score={result.score ?? 0} />
                     <div>
                       <div style={{ fontSize: 11, color: "#44446A", fontFamily: "monospace", marginBottom: 6, letterSpacing: "0.08em" }}>
-                        VASTU SCORE
+                        {panelBelief.scoreLabel}
                       </div>
                       <p style={{ margin: 0, fontSize: 12, color: "#8888AA", lineHeight: 1.6 }}>
                         {result.summary}

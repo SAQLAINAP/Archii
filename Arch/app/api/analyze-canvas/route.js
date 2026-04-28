@@ -49,7 +49,11 @@ export async function POST(req) {
   }
 
   const beliefLabel = BELIEF_LABELS[belief] || BELIEF_LABELS.vastu;
-  const systemPrompt = `You are an expert ${beliefLabel} consultant. Analyse floor plan room positions and assess compliance with ${beliefLabel} principles. Respond ONLY as valid JSON — no markdown, no code fences.`;
+  const methodologyOnly =
+    belief === 'vastu'
+      ? ''
+      : ` Use only ${beliefLabel} criteria — do not evaluate using Vastu Shastra or other traditions.`;
+  const systemPrompt = `You are an expert ${beliefLabel} consultant. Analyse floor plan room positions and assess compliance with ${beliefLabel} principles.${methodologyOnly} Respond ONLY as valid JSON — no markdown, no code fences.`;
 
   const jsonSchema = `{
   "score": <integer 0-100>,
@@ -60,7 +64,7 @@ export async function POST(req) {
   "overall_advice": "<1-2 sentences of the most important change to make>"
 }`;
 
-  const visionPrompt = `Analyse this hand-drawn floor plan sketch (${plotW}×${plotH}ft plot). Identify each room's cardinal zone (N/S/E/W/NE/NW/SE/SW/Center) from its position. Evaluate compliance with ${beliefLabel} principles.\n\nRespond ONLY as:\n${jsonSchema}`;
+  const visionPrompt = `Analyse this hand-drawn floor plan sketch (${plotW}×${plotH}ft plot). Identify each room's cardinal zone (N/S/E/W/NE/NW/SE/SW/Center) from its position where relevant to ${beliefLabel}. Evaluate compliance strictly with ${beliefLabel}.${methodologyOnly}\n\nRespond ONLY as:\n${jsonSchema}`;
 
   // ── 1. Anthropic vision ───────────────────────────────────────────────────
   if (isRealKey(process.env.ANTHROPIC_API_KEY)) {
@@ -79,7 +83,7 @@ export async function POST(req) {
         }],
       });
       const parsed = parseJSON(response.content[0].text);
-      if (parsed) return Response.json({ ...parsed, provider: 'claude' });
+      if (parsed) return Response.json({ ...parsed, provider: 'claude', belief });
     } catch (e) {
       console.error('Anthropic vision error:', e.message);
     }
@@ -95,7 +99,7 @@ export async function POST(req) {
         { inlineData: { mimeType: 'image/png', data: imageBase64 } },
       ]);
       const parsed = parseJSON(result.response.text());
-      if (parsed) return Response.json({ ...parsed, provider: 'gemini' });
+      if (parsed) return Response.json({ ...parsed, provider: 'gemini', belief });
     } catch (e) {
       console.error('Gemini vision error:', e.message);
     }
@@ -114,7 +118,7 @@ export async function POST(req) {
         temperature: 0.3,
       });
       const parsed = parseJSON(chat.choices[0].message.content);
-      if (parsed) return Response.json({ ...parsed, provider: 'groq' });
+      if (parsed) return Response.json({ ...parsed, provider: 'groq', belief });
     } catch (e) {
       console.error('Groq text fallback error:', e.message);
     }
