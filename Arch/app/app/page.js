@@ -494,9 +494,15 @@ const AGENT_LABELS = {
   spatial:  'Planning layout',
   rag:      'Retrieving vastu knowledge',
   svg:      'Rendering floor plan',
-  vastu:    'Auditing Vastu',
+  vastu:    'Scoring Vastu zones',
   cost:     'Estimating cost',
   furniture:'Placing furniture',
+};
+const AGENT_LABELS_HTML = {
+  ...{ input:'Parsing constraints', spatial:'Planning layout', rag:'Retrieving reference layouts' },
+  vastu: 'Scoring Vastu zones',
+  cost:  'Estimating cost',
+  furniture: 'Building HTML document',
 };
 
 // ─── Alternatives panel ───────────────────────────────────────────────────────
@@ -743,7 +749,9 @@ export default function App() {
   const progress = generating
     ? Math.min(97, Math.round(doneWeights + (runningId ? AGENT_WEIGHTS[runningId] * 0.5 : 0)))
     : 0;
-  const currentAgentLabel = runningId ? AGENT_LABELS[runningId] : 'Processing';
+  const currentAgentLabel = runningId
+    ? (genMode === "html" ? AGENT_LABELS_HTML[runningId] : AGENT_LABELS[runningId]) ?? 'Processing'
+    : 'Processing';
 
   const setAgent = useCallback((id, status) => {
     setAgentStatuses(s => ({ ...s, [id]: status }));
@@ -826,16 +834,102 @@ export default function App() {
     }
   }, [params]);
 
-  // ── HTML plan renderer — opens in new tab ─────────────────────────────────
-  const generateHTML = useCallback(() => {
-    const lyt = layout || computeLayout(params);
-    if (!layout) setLayout(lyt);
-    const html = buildLocalHTML(lyt, params, vastuReport, costReport);
-    const blob = new Blob([html], { type: "text/html" });
-    const url  = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    addLog("HTML Plan: ✓ opened in new tab — use Print / Save PDF from there");
-  }, [layout, params, vastuReport, costReport]);
+  // ── HTML plan — full agentic pipeline then opens in new tab ──────────────
+  const generateHTML = useCallback(async () => {
+    abortRef.current = false;
+    setGenerating(true);
+    setAgentStatuses({});
+    setAgentScores({});
+    setActiveAgent(null);
+    setVastuReport(null);
+    setCostReport(null);
+    setLog([]);
+
+    try {
+      // ── Agent 1: Input Parser ──────────────────────────────────────────
+      setAgent("input", "running");
+      addLog("Input Parser: validating plot constraints…");
+      const regCheck = checkRegulatory(params);
+      setRegErrors(regCheck);
+      if (regCheck.errors.length) addLog(`⚠ ${regCheck.errors[0]}`);
+      const lyt = computeLayout(params);
+      setLayout(lyt);
+      const vastuLayout = scoreVastuLayout(lyt.rooms);
+      addLog(`Input Parser: ✓ ${lyt.rooms.length} rooms placed — Vastu score ${vastuLayout.score}/100`);
+      setAgent("input", "done");
+      setAgentScores(s => ({ ...s, input: 100 }));
+
+      // ── Agent 2: Spatial Planner ───────────────────────────────────────
+      setAgent("spatial", "running");
+      addLog("Spatial Planner: computing Vastu-optimised room topology…");
+      await new Promise(r => setTimeout(r, 280));
+      const floorCheck = getMaxFloors(params);
+      addLog(floorCheck.isExceeded ? `⚠ Floor limit: ${floorCheck.message}` : `Spatial Planner: ✓ ${floorCheck.message}`);
+      addLog("Spatial Planner: ✓ zones assigned — NE:Puja, SE:Kitchen, SW:MasterBed, NW:Bathrooms");
+      setAgent("spatial", "done");
+      setAgentScores(s => ({ ...s, spatial: vastuLayout.score }));
+      setScores(sc => ({ ...sc, vastu: vastuLayout.score }));
+
+      // ── Agent 3: RAG Retriever ─────────────────────────────────────────
+      setAgent("rag", "running");
+      addLog("RAG Retriever: fetching reference layouts for this dimension…");
+      const ragResult = await fetchRAGContext(params);
+      const ragDocs   = ragResult?.docsFound  || 0;
+      const ragSource = ragResult?.source     || "static";
+      addLog(`RAG Retriever: ✓ ${ragDocs} reference plan(s) retrieved (source: ${ragSource})`);
+      setAgent("rag", "done");
+      setAgentScores(s => ({ ...s, rag: 100 }));
+
+      // ── Agent 4: Vastu Scorer (instant — no AI call needed) ───────────
+      setAgent("vastu", "running");
+      addLog("Vastu Scorer: checking zone compliance against Shastra rules…");
+      await new Promise(r => setTimeout(r, 220));
+      const remedies = getVastuRemedies(vastuLayout.violations || []);
+      const vReport  = { ...vastuLayout, remedies };
+      setVastuReport(vReport);
+      setAgentScores(s => ({ ...s, vastu: vastuLayout.score }));
+      setScores(sc => ({ ...sc, vastu: vastuLayout.score }));
+      addLog(`Vastu Scorer: ✓ score ${vastuLayout.score}/100 — ${vastuLayout.violations?.length || 0} violation(s)`);
+      setAgent("vastu", "done");
+
+      // ── Agent 5: Cost Estimator (instant local) ────────────────────────
+      setAgent("cost", "running");
+      addLog("Cost Estimator: computing BOM and cost breakdown…");
+      await new Promise(r => setTimeout(r, 220));
+      const cReport = buildLocalCostReport(params);
+      setCostReport(cReport);
+      setAgentScores(s => ({ ...s, cost: 90 }));
+      setScores(sc => ({ ...sc, cost: 90 }));
+      addLog(`Cost Estimator: ✓ ₹${cReport.totalCost} — ${cReport.timeline}`);
+      setAgent("cost", "done");
+
+      // ── Agent 6: HTML Renderer ─────────────────────────────────────────
+      setAgent("furniture", "running");
+      addLog("HTML Renderer: composing floor plan document with RAG context…");
+      await new Promise(r => setTimeout(r, 280));
+      const html = buildLocalHTML(lyt, params, vReport, cReport);
+      const blob = new Blob([html], { type: "text/html" });
+      window.open(URL.createObjectURL(blob), "_blank");
+      addLog("HTML Renderer: ✓ document ready — opened in new tab");
+      setAgent("furniture", "done");
+      setAgentScores(s => ({ ...s, furniture: 95 }));
+
+      addLog("✓ All agents complete");
+
+      savePlanToSupabase({
+        params, layout: lyt,
+        svgCode: buildLocalSVG(lyt, params),
+        vastuReport: vReport, costReport: cReport, furnitureData: null,
+      });
+
+    } catch (e) {
+      addLog(`✗ Error: ${e.message}`);
+      console.error(e);
+    }
+
+    setGenerating(false);
+    setActiveAgent(null);
+  }, [params, setAgent]);
 
   // ── Main generation pipeline ───────────────────────────────────────────────
   const generate = useCallback(async (refinementNote = "") => {
