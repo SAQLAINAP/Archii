@@ -854,8 +854,7 @@ export default function App() {
   }, []);
 
   const loadPlan = (plan) => {
-    setSvgCode(plan.svg_code);
-    setParams({
+    const newParams = {
       plotW: plan.plot_width,
       plotH: plan.plot_height,
       bhk: plan.bhk,
@@ -863,7 +862,14 @@ export default function App() {
       facing: plan.facing,
       budget: plan.budget,
       floors: 1, // default
-    });
+    };
+    setParams(newParams);
+    setSvgCode(plan.svg_code);
+    
+    // Recompute layout for D3 renderer
+    const lyt = computeLayout(newParams);
+    setLayout(lyt);
+
     setVastuReport(plan.vastu_report);
     setCostReport(plan.cost_report);
     setFurnitureData(plan.furniture_layout);
@@ -1220,6 +1226,8 @@ export default function App() {
                   showSunPath={showSunPath}
                   theme={theme}
                   city={params.city}
+                  layout={layout}
+                  params={params}
                 />
               )}
             </div>
