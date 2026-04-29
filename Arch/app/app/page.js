@@ -112,62 +112,287 @@ function parseJSON(raw) {
   catch { return null; }
 }
 
-// ─── Local (no-AI) plan builder — instant hypothetical plan from layout engine ─
+// ─── Deterministic SVG renderer — rooms + doors + windows + entrance ──────────
 function buildLocalSVG(layout, params) {
   const { rooms, W, H } = layout;
-  const PAD = 24;
+  const PAD = 32;
   const svgW = W + PAD * 2;
-  const svgH = H + PAD * 2;
+  const svgH = H + PAD * 2 + 20;
+  const WALL = 3;
+  const DS = Math.max(14, Math.min(22, W / 16)); // door size scaled to plot
 
+  // ── shared wall detector ───────────────────────────────────────────────────
+  function sharedWall(a, b) {
+    const T = 3;
+    if (Math.abs((a.x + a.w) - b.x) < T || Math.abs((b.x + b.w) - a.x) < T) {
+      const wx  = Math.abs((a.x + a.w) - b.x) < T ? a.x + a.w : b.x + b.w;
+      const top = Math.max(a.y, b.y);
+      const bot = Math.min(a.y + a.h, b.y + b.h);
+      if (bot - top > DS + 6) return { type:"V", wx, top, bot };
+    }
+    if (Math.abs((a.y + a.h) - b.y) < T || Math.abs((b.y + b.h) - a.y) < T) {
+      const wy  = Math.abs((a.y + a.h) - b.y) < T ? a.y + a.h : b.y + b.h;
+      const lft = Math.max(a.x, b.x);
+      const rgt = Math.min(a.x + a.w, b.x + b.w);
+      if (rgt - lft > DS + 6) return { type:"H", wy, lft, rgt };
+    }
+    return null;
+  }
+
+  // ── internal doors at shared walls ────────────────────────────────────────
+  const doors = [];
+  const usedWalls = new Set();
+  for (let i = 0; i < rooms.length; i++) {
+    for (let j = i + 1; j < rooms.length; j++) {
+      const w = sharedWall(rooms[i], rooms[j]);
+      if (!w) continue;
+      const wid = `${w.type}${(w.wx ?? w.wy).toFixed(0)}`;
+      if (usedWalls.has(wid)) continue;
+      usedWalls.add(wid);
+      if (w.type === "V") {
+        const mid = (w.top + w.bot) / 2;
+        const x = w.wx + PAD, y1 = mid - DS / 2 + PAD, y2 = mid + DS / 2 + PAD;
+        // erase wall gap
+        doors.push(`<rect x="${x - WALL}" y="${y1}" width="${WALL * 2 + 1}" height="${DS}" fill="#F5F5F0"/>`);
+        // door leaf + arc
+        doors.push(`<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="#777" stroke-width="1.2"/>`);
+        doors.push(`<path d="M ${x} ${y2} A ${DS} ${DS} 0 0 1 ${x + DS} ${y1}" fill="none" stroke="#777" stroke-width="1" stroke-dasharray="3,2"/>`);
+      } else {
+        const mid = (w.lft + w.rgt) / 2;
+        const x1 = mid - DS / 2 + PAD, x2 = mid + DS / 2 + PAD, y = w.wy + PAD;
+        doors.push(`<rect x="${x1}" y="${y - WALL}" width="${DS}" height="${WALL * 2 + 1}" fill="#F5F5F0"/>`);
+        doors.push(`<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#777" stroke-width="1.2"/>`);
+        doors.push(`<path d="M ${x2} ${y} A ${DS} ${DS} 0 0 0 ${x1} ${y + DS}" fill="none" stroke="#777" stroke-width="1" stroke-dasharray="3,2"/>`);
+      }
+    }
+  }
+
+  // ── entrance door on facing wall ──────────────────────────────────────────
+  const facing = params.facing || "North";
+  let entRoom = rooms[0];
+  if (facing === "North") entRoom = rooms.reduce((a, b) => a.y <= b.y ? a : b);
+  if (facing === "South") entRoom = rooms.reduce((a, b) => (a.y + a.h) >= (b.y + b.h) ? a : b);
+  if (facing === "East")  entRoom = rooms.reduce((a, b) => (a.x + a.w) >= (b.x + b.w) ? a : b);
+  if (facing === "West")  entRoom = rooms.reduce((a, b) => a.x <= b.x ? a : b);
+  const ecx = entRoom.x + entRoom.w / 2 + PAD;
+  const ecy = entRoom.y + entRoom.h / 2 + PAD;
+  const ENT_C = "#22AA66";
+  let entranceSVG = "";
+  if (facing === "North") {
+    const ex = ecx, ey = PAD;
+    entranceSVG = `<rect x="${ex - DS / 2}" y="${ey - WALL}" width="${DS}" height="${WALL * 2}" fill="#F5F5F0"/>
+      <line x1="${ex - DS/2}" y1="${ey}" x2="${ex + DS/2}" y2="${ey}" stroke="${ENT_C}" stroke-width="1.5"/>
+      <path d="M ${ex - DS/2} ${ey} A ${DS} ${DS} 0 0 1 ${ex + DS/2} ${ey}" fill="${ENT_C}22" stroke="${ENT_C}" stroke-width="1"/>
+      <text x="${ex}" y="${ey - 6}" text-anchor="middle" font-size="6" fill="${ENT_C}" font-family="monospace" font-weight="700">ENTRY</text>`;
+  } else if (facing === "South") {
+    const ex = ecx, ey = PAD + H;
+    entranceSVG = `<rect x="${ex - DS / 2}" y="${ey - WALL}" width="${DS}" height="${WALL * 2}" fill="#F5F5F0"/>
+      <line x1="${ex - DS/2}" y1="${ey}" x2="${ex + DS/2}" y2="${ey}" stroke="${ENT_C}" stroke-width="1.5"/>
+      <path d="M ${ex - DS/2} ${ey} A ${DS} ${DS} 0 0 0 ${ex + DS/2} ${ey}" fill="${ENT_C}22" stroke="${ENT_C}" stroke-width="1"/>
+      <text x="${ex}" y="${ey + 12}" text-anchor="middle" font-size="6" fill="${ENT_C}" font-family="monospace" font-weight="700">ENTRY</text>`;
+  } else if (facing === "East") {
+    const ex = PAD + W, ey = ecy;
+    entranceSVG = `<rect x="${ex - WALL}" y="${ey - DS / 2}" width="${WALL * 2}" height="${DS}" fill="#F5F5F0"/>
+      <line x1="${ex}" y1="${ey - DS/2}" x2="${ex}" y2="${ey + DS/2}" stroke="${ENT_C}" stroke-width="1.5"/>
+      <path d="M ${ex} ${ey - DS/2} A ${DS} ${DS} 0 0 1 ${ex} ${ey + DS/2}" fill="${ENT_C}22" stroke="${ENT_C}" stroke-width="1"/>
+      <text x="${ex + 8}" y="${ey + 3}" text-anchor="start" font-size="6" fill="${ENT_C}" font-family="monospace" font-weight="700">ENTRY</text>`;
+  } else {
+    const ex = PAD, ey = ecy;
+    entranceSVG = `<rect x="${ex - WALL}" y="${ey - DS / 2}" width="${WALL * 2}" height="${DS}" fill="#F5F5F0"/>
+      <line x1="${ex}" y1="${ey - DS/2}" x2="${ex}" y2="${ey + DS/2}" stroke="${ENT_C}" stroke-width="1.5"/>
+      <path d="M ${ex} ${ey - DS/2} A ${DS} ${DS} 0 0 0 ${ex} ${ey + DS/2}" fill="${ENT_C}22" stroke="${ENT_C}" stroke-width="1"/>
+      <text x="${ex - 5}" y="${ey + 3}" text-anchor="end" font-size="6" fill="${ENT_C}" font-family="monospace" font-weight="700">ENTRY</text>`;
+  }
+
+  // ── windows on exterior walls ─────────────────────────────────────────────
+  const windows = [];
+  const T = 3, WIN = 12;
+  rooms.forEach(r => {
+    if (r.y < T && r.w > WIN * 3) {
+      const wx = r.x + r.w / 2 + PAD - WIN;
+      windows.push(`<rect x="${wx}" y="${PAD - 3}" width="${WIN * 2}" height="6" fill="#87CEEB55" stroke="#5AACCC" stroke-width="1.2" rx="1"/>`);
+    }
+    if (Math.abs(r.y + r.h - H) < T && r.w > WIN * 3) {
+      const wx = r.x + r.w / 2 + PAD - WIN;
+      windows.push(`<rect x="${wx}" y="${PAD + H - 3}" width="${WIN * 2}" height="6" fill="#87CEEB55" stroke="#5AACCC" stroke-width="1.2" rx="1"/>`);
+    }
+    if (r.x < T && r.h > WIN * 3) {
+      const wy = r.y + r.h / 2 + PAD - WIN;
+      windows.push(`<rect x="${PAD - 3}" y="${wy}" width="6" height="${WIN * 2}" fill="#87CEEB55" stroke="#5AACCC" stroke-width="1.2" rx="1"/>`);
+    }
+    if (Math.abs(r.x + r.w - W) < T && r.h > WIN * 3) {
+      const wy = r.y + r.h / 2 + PAD - WIN;
+      windows.push(`<rect x="${PAD + W - 3}" y="${wy}" width="6" height="${WIN * 2}" fill="#87CEEB55" stroke="#5AACCC" stroke-width="1.2" rx="1"/>`);
+    }
+  });
+
+  // ── rooms ─────────────────────────────────────────────────────────────────
   const rects = rooms.map(r => {
     const color = ROOM_COLORS[r.name] || "#D0D0C8";
-    const fs = Math.max(6, Math.min(11, Math.min(r.w, r.h) / 4));
-    const subFs = Math.max(5, fs - 2);
+    const fs = Math.max(7, Math.min(11, Math.min(r.w, r.h) / 5));
+    const sub = Math.max(6, fs - 2);
     const cx = (r.x + r.w / 2 + PAD).toFixed(1);
     const cy = (r.y + r.h / 2 + PAD).toFixed(1);
     return `<rect x="${r.x + PAD}" y="${r.y + PAD}" width="${r.w}" height="${r.h}"
-        fill="${color}" stroke="#fff" stroke-width="1.5" rx="1"/>
-      ${r.w > 18 && r.h > 12 ? `<text x="${cx}" y="${(parseFloat(cy) - fs * 0.4).toFixed(1)}"
-        text-anchor="middle" font-size="${fs}" font-family="monospace"
-        fill="#1A1A1A" font-weight="700">${r.name}</text>
-      <text x="${cx}" y="${(parseFloat(cy) + fs * 1.1).toFixed(1)}"
-        text-anchor="middle" font-size="${subFs}" font-family="monospace" fill="#444">${r.ftW}×${r.ftH} ft</text>` : ""}`;
+      fill="${color}DD" stroke="#2A2A2A" stroke-width="${WALL}" rx="0.5"/>
+    ${r.w > 22 && r.h > 16 ? `
+      <text x="${cx}" y="${(parseFloat(cy) - sub * 0.6).toFixed(1)}"
+        text-anchor="middle" font-size="${fs}" font-family="Arial,monospace"
+        fill="#111" font-weight="700">${r.name}</text>
+      <text x="${cx}" y="${(parseFloat(cy) + fs * 0.9).toFixed(1)}"
+        text-anchor="middle" font-size="${sub}" font-family="monospace" fill="#444">${r.ftW}×${r.ftH}ft</text>
+    ` : r.w > 12 && r.h > 10 ? `
+      <text x="${cx}" y="${(parseFloat(cy) + fs * 0.4).toFixed(1)}"
+        text-anchor="middle" font-size="${Math.max(5, fs - 1)}" font-family="Arial,monospace"
+        fill="#111" font-weight="700">${r.name}</text>
+    ` : ""}`;
   }).join("\n");
 
-  // Plot boundary
-  const border = `<rect x="${PAD}" y="${PAD}" width="${W}" height="${H}"
-    fill="#F5F5F0" stroke="#333" stroke-width="3"/>`;
+  const border = `<rect x="${PAD}" y="${PAD}" width="${W}" height="${H}" fill="#F5F5F0" stroke="#1A1A1A" stroke-width="${WALL + 1}"/>`;
+  const dimTop = `<text x="${PAD + W / 2}" y="${PAD - 12}" text-anchor="middle" font-size="9" font-family="monospace" fill="#444">← ${params.plotW} ft →</text>`;
+  const dimLeft = `<text x="${PAD - 10}" y="${PAD + H / 2}" text-anchor="middle" font-size="9" font-family="monospace" fill="#444"
+    transform="rotate(-90,${PAD - 10},${PAD + H / 2})">${params.plotH} ft</text>`;
 
-  // Dimension labels
-  const dimTop = `<text x="${PAD + W / 2}" y="${PAD - 8}" text-anchor="middle"
-    font-size="9" font-family="monospace" fill="#555">← ${params.plotW} ft →</text>`;
-  const dimLeft = `<text x="${PAD - 6}" y="${PAD + H / 2}" text-anchor="middle"
-    font-size="9" font-family="monospace" fill="#555"
-    transform="rotate(-90,${PAD - 6},${PAD + H / 2})">${params.plotH} ft</text>`;
+  const ax = svgW - 32, ay = PAD + 22;
+  const northArrow = `<circle cx="${ax}" cy="${ay}" r="18" fill="#FFF" stroke="#CCC" stroke-width="1"/>
+    <polygon points="${ax},${ay - 14} ${ax + 5},${ay + 5} ${ax},${ay + 1} ${ax - 5},${ay + 5}" fill="#1A1A1A"/>
+    <polygon points="${ax},${ay - 14} ${ax - 5},${ay + 5} ${ax},${ay + 1} ${ax + 5},${ay + 5}" fill="#BBB"/>
+    <text x="${ax}" y="${ay + 26}" text-anchor="middle" font-size="9" font-family="monospace" fill="#333" font-weight="700">N</text>`;
 
-  // North arrow
-  const ax = svgW - 28, ay = PAD + 22;
-  const northArrow = `<circle cx="${ax}" cy="${ay}" r="16" fill="#00000055" stroke="#4488FF55" stroke-width="1"/>
-    <polygon points="${ax},${ay - 12} ${ax + 4},${ay + 5} ${ax},${ay + 1} ${ax - 4},${ay + 5}" fill="#4488FF"/>
-    <text x="${ax}" y="${ay + 24}" text-anchor="middle" font-size="8" font-family="monospace" fill="#4488FF" font-weight="700">N</text>`;
-
-  // Scale bar
   const bFt = Math.max(5, Math.round(params.plotW / 4 / 5) * 5);
   const bPx = bFt * (W / params.plotW);
-  const bx = PAD + 4, by = PAD + H - 8;
-  const scaleBar = `<rect x="${bx - 2}" y="${by - 10}" width="${bPx + 4}" height="13" fill="#00000055" rx="2"/>
-    <line x1="${bx}" y1="${by}" x2="${bx + bPx}" y2="${by}" stroke="#AAA" stroke-width="1.5"/>
-    <text x="${bx + bPx / 2}" y="${by - 4}" text-anchor="middle" font-size="7" font-family="monospace" fill="#AAA">${bFt} ft</text>`;
+  const bx = PAD + 4, by = PAD + H + 14;
+  const scaleBar = `<line x1="${bx}" y1="${by}" x2="${bx + bPx}" y2="${by}" stroke="#555" stroke-width="2"/>
+    <line x1="${bx}" y1="${by - 4}" x2="${bx}" y2="${by + 4}" stroke="#555" stroke-width="1.5"/>
+    <line x1="${bx + bPx}" y1="${by - 4}" x2="${bx + bPx}" y2="${by + 4}" stroke="#555" stroke-width="1.5"/>
+    <text x="${bx + bPx / 2}" y="${by - 7}" text-anchor="middle" font-size="7" font-family="monospace" fill="#555">${bFt} ft</text>`;
 
   return `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">
   <rect width="${svgW}" height="${svgH}" fill="#F8F8F4"/>
   ${border}
   ${rects}
-  ${dimTop}
-  ${dimLeft}
+  ${windows.join("")}
+  ${doors.join("")}
+  ${entranceSVG}
+  ${dimTop}${dimLeft}
   ${northArrow}
   ${scaleBar}
 </svg>`;
+}
+
+// ─── HTML plan renderer — opens in new tab, printable ─────────────────────────
+function buildLocalHTML(layout, params, vastuReport, costReport) {
+  const svgCode = buildLocalSVG(layout, params);
+  const date = new Date().toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" });
+  const floorLabel = { 1:"Ground Floor Only", 2:"G+1 Duplex", 3:"G+2 Triple" }[params.floors] || "Ground Floor";
+  const scoreColor = vastuReport?.score >= 80 ? "#16a34a" : vastuReport?.score >= 60 ? "#d97706" : "#dc2626";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${params.plotW}×${params.plotH}ft ${params.bhk}BHK — वास्तु AI</title>
+<style>
+  @page { size: A3 landscape; margin: 14mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #fff; color: #1a1a2a; font-size: 11px; }
+  .page { display: grid; grid-template-columns: 1fr 260px; gap: 20px; padding: 20px; min-height: 100vh; }
+  .plan-col { display: flex; flex-direction: column; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1a1a2a; padding-bottom: 12px; margin-bottom: 14px; }
+  .brand { font-size: 22px; font-weight: 700; font-family: serif; }
+  .brand em { color: #6b21a8; font-style: normal; }
+  .brand-sub { font-size: 8px; color: #888; letter-spacing: 0.14em; text-transform: uppercase; margin-top: 2px; }
+  .proj-title { font-size: 13px; font-weight: 700; margin-top: 8px; }
+  .proj-meta { text-align: right; font-size: 9px; line-height: 2; color: #666; }
+  .plan-wrap { flex: 1; display: flex; align-items: center; justify-content: center; border: 1px solid #e5e5e5; border-radius: 3px; padding: 12px; background: #fafafa; }
+  .plan-wrap svg { max-width: 100%; max-height: 62vh; }
+  .note { margin-top: 8px; font-size: 8px; color: #aaa; text-align: center; }
+  .sidebar { border-left: 1px solid #e5e5e5; padding-left: 18px; display: flex; flex-direction: column; gap: 18px; }
+  .sec-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.12em; color: #888; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 8px; }
+  .stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .stat { border: 1px solid #e5e5e5; border-radius: 3px; padding: 7px 9px; }
+  .stat-lbl { font-size: 8px; color: #999; text-transform: uppercase; }
+  .stat-val { font-size: 13px; font-weight: 700; margin-top: 2px; }
+  .room-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #f5f5f5; font-size: 10px; }
+  .room-row .nm { color: #333; }
+  .room-row .dm { color: #888; font-family: monospace; }
+  .big-num { font-size: 26px; font-weight: 700; }
+  .zones { font-size: 9px; color: #666; line-height: 1.9; }
+  .btn-print { width: 100%; padding: 9px; background: #1a1a2a; color: #fff; border: none; border-radius: 3px; cursor: pointer; font-size: 10px; letter-spacing: 0.05em; margin-top: auto; }
+  @media print { .btn-print { display: none; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="plan-col">
+    <div class="header">
+      <div>
+        <div class="brand">वास्तु <em>AI</em></div>
+        <div class="brand-sub">Architectural Design Platform</div>
+        <div class="proj-title">${params.plotW}×${params.plotH}ft ${params.bhk}BHK Floor Plan</div>
+      </div>
+      <div class="proj-meta">
+        <div>${date}</div>
+        <div>${params.city}</div>
+        <div>${params.facing}-facing · ${floorLabel}</div>
+        <div>${params.budget}</div>
+      </div>
+    </div>
+    <div class="plan-wrap">${svgCode}</div>
+    <div class="note">Indicative plan · dimensions in feet · Vastu zones per classical Shastra guidelines</div>
+  </div>
+
+  <div class="sidebar">
+    <div>
+      <div class="sec-label">Project Specs</div>
+      <div class="stat-row">
+        <div class="stat"><div class="stat-lbl">Plot</div><div class="stat-val" style="font-size:11px">${params.plotW}×${params.plotH}ft</div></div>
+        <div class="stat"><div class="stat-lbl">BHK</div><div class="stat-val">${params.bhk}</div></div>
+        <div class="stat"><div class="stat-lbl">Facing</div><div class="stat-val" style="font-size:11px">${params.facing}</div></div>
+        <div class="stat"><div class="stat-lbl">Area</div><div class="stat-val" style="font-size:11px">${params.plotW * params.plotH} sqft</div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label">Room Schedule</div>
+      <div>${layout.rooms.map(r =>
+        `<div class="room-row"><span class="nm">${r.name}</span><span class="dm">${r.ftW}×${r.ftH}ft</span></div>`
+      ).join("")}</div>
+    </div>
+
+    ${vastuReport ? `
+    <div>
+      <div class="sec-label">Design Score</div>
+      <div class="big-num" style="color:${scoreColor}">${vastuReport.score}<span style="font-size:13px;color:#aaa">/100</span></div>
+      <div style="margin-top:5px;font-size:9px;color:${vastuReport.violations?.length ? '#d97706' : '#16a34a'}">
+        ${vastuReport.violations?.length ? `${vastuReport.violations.length} item(s) to review` : "All checks passed"}
+      </div>
+    </div>` : ""}
+
+    ${costReport ? `
+    <div>
+      <div class="sec-label">Cost Estimate</div>
+      <div class="big-num" style="color:#6b21a8">₹${costReport.totalCost}L</div>
+      <div style="font-size:9px;color:#888;margin-top:3px">${costReport.timeline}</div>
+    </div>` : ""}
+
+    <div>
+      <div class="sec-label">Zone Reference</div>
+      <div class="zones">
+        NE → Puja / Prayer<br>
+        SE → Kitchen<br>
+        SW → Master Bedroom<br>
+        NW → Bathrooms<br>
+        N / E → Living Room<br>
+        S / W → Staircase
+      </div>
+    </div>
+
+    <button class="btn-print" onclick="window.print()">↓ Print / Save PDF</button>
+  </div>
+</div>
+</body>
+</html>`;
 }
 
 function buildLocalCostReport(params) {
@@ -600,6 +825,17 @@ export default function App() {
       setGenerating(false);
     }
   }, [params]);
+
+  // ── HTML plan renderer — opens in new tab ─────────────────────────────────
+  const generateHTML = useCallback(() => {
+    const lyt = layout || computeLayout(params);
+    if (!layout) setLayout(lyt);
+    const html = buildLocalHTML(lyt, params, vastuReport, costReport);
+    const blob = new Blob([html], { type: "text/html" });
+    const url  = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    addLog("HTML Plan: ✓ opened in new tab — use Print / Save PDF from there");
+  }, [layout, params, vastuReport, costReport]);
 
   // ── Main generation pipeline ───────────────────────────────────────────────
   const generate = useCallback(async (refinementNote = "") => {
@@ -1066,7 +1302,12 @@ export default function App() {
         <Sidebar
           params={params}
           onParamChange={handleParamChange}
-          onGenerate={() => { genMode === "image" ? generateImage() : generate(); setMobileDrawer(null); }}
+          onGenerate={() => {
+            if (genMode === "image") generateImage();
+            else if (genMode === "html") generateHTML();
+            else generate();
+            setMobileDrawer(null);
+          }}
           onGenerateAlts={generateAlts}
           onExportSVG={exportSVG}
           onExportPNG={exportPNG}
@@ -1116,37 +1357,6 @@ export default function App() {
                 whiteSpace:"nowrap",
               }}>{t.label}</button>
           )}
-
-          {/* Generation mode toggle */}
-          <div style={{
-            marginLeft:"auto", display:"flex", alignItems:"center",
-            background:"#0a0a1a", border:"1px solid #1e1e3a",
-            borderRadius:20, padding:3, gap:2, flexShrink:0,
-          }}>
-            {[
-              { mode:"image", label:"🖼 Image", color:"#44DD88", title:"GPT Image — Primary" },
-              { mode:"svg",   label:"〈/〉 SVG",  color:"#4488FF", title:"Agentic SVG — Beta" },
-            ].map(({ mode, label, color, title }) => (
-              <button
-                key={mode}
-                title={title}
-                onClick={() => { setGenMode(mode); setTab("plan"); }}
-                style={{
-                  padding:"4px 10px", borderRadius:16, border:"none", cursor:"pointer",
-                  fontSize:10, fontFamily:"monospace", fontWeight:700,
-                  background: genMode === mode ? `${color}22` : "transparent",
-                  color:      genMode === mode ? color : "#444",
-                  outline:    genMode === mode ? `1px solid ${color}55` : "none",
-                  transition:"all 0.15s",
-                  whiteSpace:"nowrap",
-                }}
-              >
-                {label}
-                {mode === "image" && <span style={{ marginLeft:4, fontSize:8, opacity:0.7 }}>PRIMARY</span>}
-                {mode === "svg"   && <span style={{ marginLeft:4, fontSize:8, opacity:0.6, color:"#FFAA22" }}>BETA</span>}
-              </button>
-            ))}
-          </div>
 
           {/* Mobile: controls button for right panel */}
           {isMobile && (
@@ -1208,6 +1418,21 @@ export default function App() {
                     <div style={{ fontSize:28, marginBottom:12, animation:"pulse 1.5s infinite" }}>🖼</div>
                     <div style={{ fontSize:11, color:"#44DD88" }}>Generating floor plan image…</div>
                     <div style={{ fontSize:9, color:"#444", marginTop:6 }}>GPT Image · this takes ~15–30s</div>
+                  </div>
+                </div>
+              ) : genMode === "html" ? (
+                <div style={{
+                  width:"100%", height:"100%",
+                  display:"flex", flexDirection:"column",
+                  alignItems:"center", justifyContent:"center",
+                  background:"#080814",
+                }}>
+                  <div style={{ textAlign:"center", fontFamily:"monospace" }}>
+                    <div style={{ fontSize:28, marginBottom:12 }}>📄</div>
+                    <div style={{ fontSize:11, color:"#FFAA22", marginBottom:6 }}>HTML Plan Mode</div>
+                    <div style={{ fontSize:9, color:"#444", maxWidth:220, lineHeight:1.6 }}>
+                      Click <strong style={{ color:"#FFAA22" }}>Generate Plan</strong> to build a precise floor plan and open it in a new tab with print / PDF export.
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1498,6 +1723,37 @@ export default function App() {
             scores={agentScores}
             belief={params.belief}
           />
+        </div>
+
+        {/* ── Generation Mode ── */}
+        <div style={{ borderTop:"2px solid #1A1A28", padding:"12px 10px" }}>
+          <div style={{ fontSize:8, color:"#333", letterSpacing:"0.16em", textTransform:"uppercase", marginBottom:8 }}>── Gen Mode ──</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+            {[
+              { mode:"image", icon:"🖼", label:"Image GEN",  color:"#44DD88", badge:"PRIMARY" },
+              { mode:"svg",   icon:"⬡",  label:"SVG GEN",    color:"#4488FF", badge:"BETA"    },
+              { mode:"html",  icon:"📄", label:"HTML PLAN",  color:"#FFAA22", badge:"NEW"     },
+            ].map(({ mode, icon, label, color, badge }) => (
+              <button
+                key={mode}
+                onClick={() => { setGenMode(mode); setTab("plan"); }}
+                style={{
+                  display:"flex", alignItems:"center", justifyContent:"space-between",
+                  padding:"7px 10px", borderRadius:5, border:"none", cursor:"pointer",
+                  background: genMode === mode ? `${color}18` : "transparent",
+                  outline: genMode === mode ? `1px solid ${color}44` : "1px solid #1A1A28",
+                  transition:"all 0.15s",
+                }}
+              >
+                <span style={{ fontSize:10, fontFamily:"monospace", fontWeight:700, color: genMode === mode ? color : "#555" }}>
+                  {icon} {label}
+                </span>
+                <span style={{ fontSize:7, fontFamily:"monospace", color: genMode === mode ? color : "#333" }}>
+                  {badge}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Mini log */}
