@@ -8,11 +8,13 @@ import {
   VASTU_ZONE_RULES,
   VALIDATION_RULES,
   VALIDATION_RULES_PROMPT,
+  ALLOCATION_RULES,
+  buildAllocationPrompt,
   buildQueryDocument,
   formatRAGContext,
 } from "./knowledgeBase.js";
 
-export { VALIDATION_RULES, VALIDATION_RULES_PROMPT };
+export { VALIDATION_RULES, VALIDATION_RULES_PROMPT, ALLOCATION_RULES, buildAllocationPrompt };
 
 // ─── Keyword-based fallback retrieval from static examples ───────────────────
 function keywordRetrieve(params, topK = 3) {

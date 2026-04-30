@@ -310,6 +310,104 @@ export const VALIDATION_RULES_PROMPT = (() => {
   return lines.join("\n");
 })();
 
+// ─── Feature Allocation & Prioritization Rules (AP_01–AP_30) ─────────────────
+// Pre-generation area budgeting, feature pruning, and proportional allocation
+// keyed by total_area_sqft bracket. Applied BEFORE room sizing to avoid
+// generating rooms that cannot physically fit in the given plot area.
+export const ALLOCATION_RULES = [
+  // ── Micro Spaces (< 400 sqft) ─────────────────────────────────────────────
+  {
+    id: "AP_01", cat: "Micro_Spaces", action: "reject_and_reconfigure",
+    condition: "total_area_sqft < 400",
+    rule: "Under 400 sqft: replace dedicated bedroom with a studio_room (≥200 sqft). Dining room is forbidden. Required features: bathroom + kitchenette + studio_room.",
+  },
+  {
+    id: "AP_03", cat: "Micro_Spaces", action: "prune_lowest_priority",
+    condition: "total_area_sqft < 400",
+    rule: "Under 400 sqft prioritization order (drop from the bottom if area runs out): bathroom → kitchenette → studio_room → storage → balcony.",
+  },
+  // ── Small 1BHK (400–699 sqft) ─────────────────────────────────────────────
+  {
+    id: "AP_06", cat: "Small_1BHK", action: "scale_dimensions",
+    condition: "400 ≤ total_area_sqft ≤ 699",
+    rule: "1BHK proportional allocation: primary_bedroom = 15–20% of total (min 100 sqft); living_room = 25–30% of total (min 150 sqft); bathroom = 45–50 sqft absolute.",
+  },
+  {
+    id: "AP_10", cat: "Small_1BHK", action: "remove_walls",
+    condition: "400 ≤ total_area_sqft ≤ 699",
+    rule: "1BHK kitchen must be open-plan — no fully enclosing walls. Kitchen flows directly into living/dining zone.",
+  },
+  // ── Medium 2BHK (700–1199 sqft) ───────────────────────────────────────────
+  {
+    id: "AP_12", cat: "Medium_2BHK", action: "resize_to_fit",
+    condition: "700 ≤ total_area_sqft ≤ 1199",
+    rule: "2BHK minimum sizes: primary_bedroom ≥ 130 sqft; secondary_bedroom ≥ 100 sqft; primary_bathroom ≥ 50 sqft; common_bathroom ≥ 45 sqft; kitchen = 10–12% of total.",
+  },
+  {
+    id: "AP_14", cat: "Medium_2BHK", action: "prune_or_shrink_lowest",
+    condition: "700 ≤ total_area_sqft ≤ 1199",
+    rule: "2BHK prioritization order (prune/shrink from bottom if area runs out): living_dining_zone → primary_bedroom → secondary_bedroom → kitchen → balcony → foyer.",
+  },
+  {
+    id: "AP_17", cat: "Medium_2BHK", action: "apply_downgrade",
+    condition: "total_area_sqft < 900",
+    rule: "Under 900 sqft: home_office must be downgraded to an office_nook (≤25 sqft alcove). Do not allocate a full room for it.",
+  },
+  // ── Universal Proportions (all sizes) ─────────────────────────────────────
+  {
+    id: "AP_25", cat: "Universal_Proportions", action: "heavy_penalty",
+    condition: "always",
+    rule: "Circulation budget hard cap: hallways + corridors + foyer + stairs combined must NOT exceed 15% of total floor area.",
+  },
+  {
+    id: "AP_26", cat: "Universal_Proportions", action: "loss_function_penalty",
+    condition: "always",
+    rule: "Social zone target: living + dining + kitchen combined should occupy 40–50% of total floor area. Outside this band is a layout quality penalty.",
+  },
+  // ── Scenario Prioritization ────────────────────────────────────────────────
+  {
+    id: "AP_30", cat: "Scenario_Prioritization", action: "force_downgrade",
+    condition: "master_suite_area < 200 sqft",
+    rule: "Master suite under 200 sqft: force walk_in_closet → reach_in_wardrobe and reallocate that space to bed_area. Priority order within suite: bed_area > bath_area > walk_in_closet.",
+  },
+];
+
+// Human-readable prompt block for allocation rules, rendered with active conditions
+export function buildAllocationPrompt(totalAreaSqft) {
+  const area = totalAreaSqft || 0;
+  const applicable = ALLOCATION_RULES.filter(r => {
+    const c = r.condition;
+    if (c === "always") return true;
+    // "MIN ≤ total_area_sqft ≤ MAX"  (two ≤ signs, no ≥)
+    const rangeMatch = c.match(/([\d.]+)\s*≤[^≤]+≤\s*([\d.]+)/);
+    if (rangeMatch) return area >= parseFloat(rangeMatch[1]) && area <= parseFloat(rangeMatch[2]);
+    // "total_area_sqft < VALUE" or "< VALUE"
+    const ltMatch = c.match(/total_area_sqft\s*<\s*([\d.]+)/);
+    if (ltMatch) return area < parseFloat(ltMatch[1]);
+    // "total_area_sqft > VALUE"
+    const gtMatch = c.match(/total_area_sqft\s*>\s*([\d.]+)/);
+    if (gtMatch) return area > parseFloat(gtMatch[1]);
+    // Zone-local conditions (e.g. "master_suite_area < 200 sqft") — always include;
+    // the AI resolves them at room-sizing time
+    return true;
+  });
+
+  if (!applicable.length) return "";
+
+  const byCategory = {};
+  for (const r of applicable) {
+    if (!byCategory[r.cat]) byCategory[r.cat] = [];
+    byCategory[r.cat].push(`  [${r.id}|${r.action.toUpperCase()}] ${r.rule}`);
+  }
+
+  const lines = [`FEATURE ALLOCATION RULES for ${area} sqft plan (applied BEFORE room sizing):`];
+  for (const [cat, items] of Object.entries(byCategory)) {
+    lines.push(`\n${cat.replace(/_/g, " ")}:`);
+    lines.push(...items);
+  }
+  return lines.join("\n");
+}
+
 // ─── Build a rich text document for a retrieval query ─────────────────────────
 export function buildQueryDocument(params) {
   const { plotW, plotH, bhk, facing, belief = 'vastu', city } = params;
@@ -320,14 +418,17 @@ export function buildQueryDocument(params) {
 // ─── Format retrieved context for prompt injection ────────────────────────────
 export function formatRAGContext(retrievedDocs, params) {
   if (!retrievedDocs?.length) return "";
-  const { facing, bhk } = params;
+  const { facing, bhk, plotW, plotH } = params;
   const zoneMap = VASTU_ZONE_RULES[facing]?.ideal || VASTU_ZONE_RULES.North.ideal;
   const zoneList = Object.entries(zoneMap).map(([room, zone]) => `${room}→${zone}`).join(", ");
+  const totalArea = (parseFloat(plotW) || 0) * (parseFloat(plotH) || 0);
 
   const examples = retrievedDocs
     .slice(0, 3)
     .map((doc, i) => `Example ${i + 1} (score ${doc.score || '~90'}/100):\n${doc.content || doc.description}`)
     .join("\n\n");
+
+  const allocationBlock = buildAllocationPrompt(totalArea);
 
   return `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -349,11 +450,11 @@ HIGH-SCORING REFERENCE EXAMPLES:
 ${examples}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${VALIDATION_RULES_PROMPT}
+${allocationBlock ? allocationBlock + "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" : ""}${VALIDATION_RULES_PROMPT}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-REJECT actions are hard constraints — violating them makes the layout invalid.
-PENALTY actions are soft constraints — violations lower the plan score but do not block generation.
-Apply ALL rules above before finalising any room positions, dimensions, or adjacencies.
+REJECT / REJECT_AND_RECONFIGURE = hard constraints — layout is invalid without them.
+PENALTY / LOSS_FUNCTION_PENALTY = soft constraints — violations lower score but do not block.
+Apply allocation rules FIRST (room budgeting), then validation rules (spatial checks).
 Apply the zone map and door/window rules STRICTLY. The reference examples show what a 90+ scoring plan looks like.
 `;
 }
