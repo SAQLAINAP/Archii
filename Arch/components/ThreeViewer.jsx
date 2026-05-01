@@ -11,6 +11,25 @@ const FLOOR_T    = 0.08;
 const WALK_SPEED = 10;
 const EYE_H      = 5.5;
 
+// ─── Furniture heights (ft) by item type ─────────────────────────────────────
+const FURN_H_MAP = {
+  "sofa": 3.0, "coffee table": 1.5, "tv unit": 1.5,
+  "king bed": 2.2, "double bed": 2.0, "queen bed": 2.0,
+  "side table": 2.0, "wardrobe": 6.5,
+  "counter": 3.0, "refrigerator": 5.5,
+  "dining table": 2.5,
+  "wc": 2.5, "basin": 3.0,
+  "altar": 3.0,
+  "desk": 2.5, "chair": 3.0,
+};
+function getFurnH(name) {
+  const lower = (name || "").toLowerCase();
+  for (const [k, h] of Object.entries(FURN_H_MAP)) {
+    if (lower.includes(k)) return h;
+  }
+  return 2.5;
+}
+
 // ─── Scene background setter ──────────────────────────────────────────────────
 function SceneBackground({ color }) {
   const { scene } = useThree();
@@ -115,6 +134,21 @@ function NorthLabel({ x, z }) {
   );
 }
 
+// ─── Furniture piece ─────────────────────────────────────────────────────────
+function FurnitureItem({ item, cx, cz }) {
+  const ftW  = item.w / 10;
+  const ftD  = item.h / 10; // depth (Z axis)
+  const h    = getFurnH(item.name);
+  const wx   = (item.x + item.w / 2) / 10 - cx;
+  const wz   = (item.y + item.h / 2) / 10 - cz;
+  return (
+    <mesh position={[wx, h / 2 + FLOOR_T, wz]} castShadow receiveShadow>
+      <boxGeometry args={[ftW, h, ftD]} />
+      <meshStandardMaterial color={item.color || "#8B7355"} roughness={0.65} metalness={0.05} />
+    </mesh>
+  );
+}
+
 // ─── First-person walker ──────────────────────────────────────────────────────
 function WalkController({ active }) {
   const { camera, gl } = useThree();
@@ -164,7 +198,7 @@ function WalkController({ active }) {
 }
 
 // ─── Main scene ───────────────────────────────────────────────────────────────
-function Scene({ rooms, totalFtW, totalFtH, walkMode, selected, onSelect }) {
+function Scene({ rooms, totalFtW, totalFtH, walkMode, selected, onSelect, furniture, showFurniture }) {
   const cx = totalFtW / 2;
   const cz = totalFtH / 2;
 
@@ -197,6 +231,12 @@ function Scene({ rooms, totalFtW, totalFtH, walkMode, selected, onSelect }) {
         />
       ))}
 
+      {showFurniture && furniture?.placements?.map((p, pi) =>
+        p.items.map((item, ii) => (
+          <FurnitureItem key={`f-${pi}-${ii}`} item={item} cx={cx} cz={cz} />
+        ))
+      )}
+
       <NorthLabel x={totalFtW / 2 - cx + 4} z={-(totalFtH / 2 - cz) - 5} />
 
       {walkMode
@@ -216,9 +256,10 @@ function Scene({ rooms, totalFtW, totalFtH, walkMode, selected, onSelect }) {
 }
 
 // ─── Exported component ───────────────────────────────────────────────────────
-export default function ThreeViewer({ layout, params }) {
-  const [walkMode,  setWalkMode]  = useState(false);
-  const [selected,  setSelected]  = useState(null);
+export default function ThreeViewer({ layout, params, furniture }) {
+  const [walkMode,       setWalkMode]       = useState(false);
+  const [showFurniture,  setShowFurniture]  = useState(true);
+  const [selected,       setSelected]       = useState(null);
   const containerRef = useRef(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
 
@@ -273,6 +314,8 @@ export default function ThreeViewer({ layout, params }) {
             walkMode={walkMode}
             selected={selected}
             onSelect={n => setSelected(s => s === n ? null : n)}
+            furniture={furniture}
+            showFurniture={showFurniture}
           />
         </Canvas>
       )}
@@ -299,8 +342,24 @@ export default function ThreeViewer({ layout, params }) {
         )}
       </div>
 
-      {/* Top-right: Walk toggle */}
-      <div style={{ position: "absolute", top: 12, right: 12, zIndex: 10 }}>
+      {/* Top-right: controls */}
+      <div style={{ position: "absolute", top: 12, right: 12, zIndex: 10, display: "flex", gap: 6 }}>
+        {furniture?.placements?.length > 0 && (
+          <button
+            onClick={() => setShowFurniture(v => !v)}
+            style={{
+              padding: "6px 14px",
+              background: showFurniture ? "rgba(20,30,60,0.85)" : "rgba(0,0,0,0.6)",
+              border: `1px solid ${showFurniture ? "#4488FF" : "#444"}`,
+              borderRadius: 6,
+              color: showFurniture ? "#88AAFF" : "#666",
+              fontSize: 10, cursor: "pointer", fontFamily: "monospace",
+              fontWeight: 700, letterSpacing: "0.05em",
+            }}
+          >
+            {showFurniture ? "■ FURN" : "□ FURN"}
+          </button>
+        )}
         <button
           onClick={() => { setWalkMode(w => !w); setSelected(null); }}
           style={{

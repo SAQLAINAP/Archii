@@ -245,6 +245,105 @@ Room zones: Living→N, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bedroom 3�
 Key vastu features: Family Room in center zone (Brahmasthan) — this is the gathering heart of home. Multiple service rooms in NW column. Puja in NE. Kitchen in SE. Master Bed in SW. 5 bedrooms distributed in W, N, E zones.
 Staircase: SW zone, steps rise from East to West, 14 steps, labeled "UP" with step count.`,
   },
+  {
+    layoutId: "30x60_3BHK_East",
+    dimension: "30x60", bhk: 3, facing: "East", score: 92,
+    description: `30x60ft 3BHK East-facing vastu floor plan. Score: 92/100.
+Long narrow plot (30 wide × 60 deep) with East entrance.
+Room zones: Bedroom 3→N, Living→E, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→S, Master Bath→SW, Corridor→C.
+Key vastu features: 1800 sqft plot. East entrance is most auspicious. Living room in East wing with morning sun. Puja NE receives first sunrise. Kitchen SE fire zone. Master Bed SW heaviest zone with attached bath on South wall. Two secondary bedrooms in N and W (lighter zones). Three service rooms consolidated in NW corner. Long plot depth allows generous room sizes — kitchen and dining can be larger. Central corridor is Brahmasthan — kept open with natural light from courtyard or skylight if 2-floor.
+Door placements: Entrance East wall, North half. Living faces East. Bedroom 3 opens South to corridor. Bedroom 2 opens East to corridor. All rooms connect to central spine corridor. Kitchen opens West.
+Window placements: Living — large East window. Puja — East window. Kitchen — East window mandatory. Master Bed — South window only (SW zone). Bedroom 2 (W) — West + North windows. Bedroom 3 (N) — North + East windows. Bathrooms — North windows.
+AP rules: 1800 sqft is 2BHK bracket (1000–1799) edge — 3BHK feasible with slightly compact rooms. Each bedroom ≥ 120 sqft. Corridor width 3.5ft minimum.`,
+  },
+  {
+    layoutId: "30x60_3BHK_North",
+    dimension: "30x60", bhk: 3, facing: "North", score: 91,
+    description: `30x60ft 3BHK North-facing vastu floor plan. Score: 91/100.
+Deep North-facing plot (30 wide × 60 deep). Entrance on North wall.
+Room zones: Living→N, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bedroom 3→NW, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→S, Master Bath→S, Corridor→C.
+Key vastu features: North entrance. Living in North wing captures morning light. Extra depth allows Living + Dining as separate zones on North-South axis. Puja NE. Kitchen SE with generous counter space. Master Bed SW with attached bath. Bedroom 2 in W zone. Bedroom 3 can be placed above Bathroom row (NW zone — acceptable for secondary bedroom). Brahmasthan corridor connects all rooms. Extra depth can accommodate a study nook or home office in the center-North area.
+Door placements: Entrance North wall, slight East offset. Living door opens South to corridor. Kitchen opens East. All bedrooms open toward corridor. Puja faces East.
+Window placements: Living — North + East windows (full width of North wall). Kitchen — East window. Puja — East window. Bedrooms W and NW — West and North windows. Master Bed — South window. Corridor — skylight or interior window on North wall for cross-ventilation.`,
+  },
+  {
+    layoutId: "40x60_4BHK_East",
+    dimension: "40x60", bhk: 4, facing: "East", score: 90,
+    description: `40x60ft 4BHK East-facing vastu floor plan. Score: 90/100.
+Large plot (2400 sqft). East-facing entrance — most auspicious direction.
+Room zones: Bedroom 4→N, Living→E, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bedroom 3→NW, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→S, Master Bath→S, Family Room→C, Corridor→C.
+Key vastu features: East entrance with prominent porch. Living room in East wing, wide and airy. Puja NE receives first morning light — ideal for daily prayers. Kitchen SE fire zone. Master Bed SW with attached bath. 3 secondary bedrooms in N, W, NW zones. Family room in center (Brahmasthan) — acceptable when surrounded by rooms on all four sides. Three service rooms NW. Dining in South zone adjacent to Kitchen.
+Staircase if 2-floor: SW zone — MUST NOT encroach on NE. 14 steps, rises East to West. Landing on West side. Labeled "UP 14 STEPS".
+Door placements: Entrance East wall, North half. Family room — open archway from Living. Bedrooms connect via corridor. Puja faces East. Kitchen opens North to corridor.
+Window placements: Living — large East-facing glass (main facade). Puja — East window. Kitchen — East window. Master Bed — South only. Bedrooms N, W, NW — North and West windows. Dining — East or South window.`,
+  },
+  {
+    layoutId: "50x60_4BHK_North",
+    dimension: "50x60", bhk: 4, facing: "North", score: 90,
+    description: `50x60ft 4BHK North-facing vastu floor plan. Score: 90/100.
+Wide plot (50 wide × 60 deep). 3000 sqft — 3BHK/4BHK bracket.
+Room zones: Living→N, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bedroom 3→E, Bedroom 4→W, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→S, Master Bath→S, Family Room→C, Corridor→C.
+Key vastu features: Wide frontage allows a broad North-facing Living room spanning most of the North wall. Two-zone approach: public zone (Living, Dining, Kitchen) in East half; private zone (bedrooms) in West half. Puja fills NE corner. Kitchen SE. Master Bed SW. Four bedrooms: Master SW, Bed 2 and Bed 4 in W zone, Bed 3 in E zone. Family room as Brahmasthan center. Three service rooms NW column. Wide plot allows 6ft corridors (above minimum 3ft).
+AP rules applied: AP_20 (3BHK: 1800–2399 sqft, 4BHK: 2400+ sqft — 3000 sqft comfortably supports 4BHK). Living ≥ 300 sqft. Each bedroom ≥ 130 sqft. Kitchen ≥ 120 sqft.
+Staircase if 2-floor: SW zone, 14 steps, rises North to South.
+Window placements: Living — North wall full-width windows. Puja — East. Kitchen — East. Master Bed — South + West (SW zone). Bed 2, Bed 4 (W) — West. Bed 3 (E) — East. All bathrooms — North windows.`,
+  },
+  {
+    layoutId: "60x60_5BHK_North",
+    dimension: "60x60", bhk: 5, facing: "North", score: 89,
+    description: `60x60ft 5BHK North-facing square plot vastu floor plan. Score: 89/100.
+Large square plot (3600 sqft). 5BHK with 2 attached baths and family lounge.
+Room zones: Living→N, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bedroom 3→E, Bedroom 4→NW, Bedroom 5→NE-outer, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→S, Master Bath→S, Family Room→C, Study→N, Corridor→C.
+Key vastu features: Square Brahmasthan must be protected — Family Room occupies center with open floor-plan. 5 bedrooms: Master SW, Bed 2 and 4 in W column, Bed 3 in E zone, Bed 5 in N zone (acceptable for secondary). Puja occupies NE corner. Kitchen SE. Three service rooms NW. Study in North zone (East is also acceptable). Living spans full North wing.
+Critical note for square plots: The Brahmasthan (center 20% of plot) must remain structurally open — no load-bearing columns in this zone. Family Room ceiling can be double-height.
+Door placements: Entrance North wall, East half. All 5 bedrooms connect to corridor network. Family Room — open archways from Living and Dining. Kitchen opens East. Puja faces East.
+Window placements: Living — North + East windows. Study — North window. Puja — East window. Kitchen — East window. Master Bed — South only. Bed 2, 4 (W) — West windows. Bed 3 (E) — East windows. Bed 5 (N) — North windows.`,
+  },
+  {
+    layoutId: "20x40_2BHK_North",
+    dimension: "20x40", bhk: 2, facing: "North", score: 90,
+    description: `20x40ft 2BHK North-facing compact vastu floor plan. Score: 90/100.
+800 sqft plot — efficient 2BHK layout. North entrance.
+Room zones: Living→N, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→E, Corridor→C.
+Key vastu features: Compact plot requires space efficiency. Living in North. Puja NE corner (small but mandatory). Kitchen SE. Master Bed SW. Bedroom 2 in W zone. Service rooms stacked in NW. No separate Dining room — Dining alcove adjacent to Kitchen in E zone. Corridor is narrow (3–3.5ft) but connects all rooms. Brahmasthan kept as circulation spine.
+AP rules: AP_06 (2BHK: 800–999 sqft bracket). Living ≥ 144 sqft. Master Bed ≥ 120 sqft. Bedroom 2 ≥ 100 sqft. Kitchen ≥ 60 sqft. Bathroom ≥ 45 sqft. Open-plan encouraged for small plots.
+Door placements: Entrance North wall center. Living opens to corridor via arch. Kitchen door North wall. Bedroom 2 opens East. Master Bed opens North. Bathroom and Toilet doors face corridor.
+Window placements: Living — North window. Kitchen — East window. Puja — East window. Master Bed — South window. Bedroom 2 — West window. Bathrooms — North windows.`,
+  },
+  {
+    layoutId: "20x40_2BHK_South",
+    dimension: "20x40", bhk: 2, facing: "South", score: 83,
+    description: `20x40ft 2BHK South-facing compact vastu floor plan. Score: 83/100.
+800 sqft plot with South entrance — requires careful placement to mitigate inauspicious effects.
+Room zones: Living→SE, Kitchen→SE, Master Bed→SW, Bedroom 2→N, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→E, Corridor→C.
+Key vastu features: South-facing entrance MUST be in SE portion of South wall (NOT SW — that brings misfortune). Heavier walls on South and West. Living in SE wing. Kitchen also SE — compact plot means Living and Dining share SE zone. Puja in NE with East window. Master Bed SW critical. Bedroom 2 in N zone (lighter, acceptable). Service rooms NW. Brahmasthan corridor — avoid heavy structure in center.
+Mitigation rules for South-facing: Extend South wall slightly higher for visual weight. Avoid glass on South face of entrance. Place threshold stone at South entrance. Keep NE quadrant completely open and lightweight.
+Door placements: Entrance South wall, East half (SE sector). Living opens North to corridor. Bedroom 2 opens South to corridor. Kitchen opens North. Puja faces East. Bathrooms open West.
+Window placements: Puja — East window (mandatory for morning light). Kitchen — East window (mandatory). Living — East window. Bedroom 2 (N) — North window. Master Bed (SW) — West window only. Bathrooms — North windows.`,
+  },
+  {
+    layoutId: "60x90_5BHK_North",
+    dimension: "60x90", bhk: 5, facing: "North", score: 87,
+    description: `60x90ft 5BHK North-facing bungalow-scale vastu floor plan. Score: 87/100.
+Very large plot (5400 sqft). Full bungalow with double-height entry, internal courtyard potential.
+Room zones: Living→N, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bedroom 3→E, Bedroom 4→NW-upper, Bedroom 5→NE-outer, Bathroom 1→NW, Bathroom 2→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→S, Master Bath→S, Family Room→C, Study/Office→E, Staircase→SW, Corridor→C.
+Key vastu features: Bungalow scale allows internal courtyard in Brahmasthan. Courtyard brings natural light and ventilation to central corridor and Family Room. Puja NE with dedicated ante-room. Kitchen SE with pantry and utility adjacent in NW. Master Bed SW with luxury attached bath and dressing room on South wall. Four secondary bedrooms distributed in W, E, NW zones. Study/Office in E zone for morning productivity. Staircase in SW — MANDATORY zone, not NE.
+Setback requirements: Minimum 5ft front setback (North), 3ft sides, 3ft rear. Parking space 8×16ft in NW zone of setback.
+Staircase: SW zone, 16 steps to first floor at 6.75-inch rise. Labeled "UP 16 STEPS". Railing on South wall side.
+Door placements: Entrance North wall with double-door porch. Living room double doors South wall to Dining. All bedrooms face corridor network. Puja — East door. Kitchen — North wall door. Service entrance — West wall.
+Window placements: Living — full North wall fenestration (floor-to-ceiling preferred). Puja — East + North windows. Kitchen — East window. Master Bed — South only. Bed 2 (W) — West. Bed 3 (E) — East. Study (E) — East window (natural study light). Courtyard — all internal rooms can have courtyard-facing windows.`,
+  },
+  {
+    layoutId: "25x40_3BHK_North",
+    dimension: "25x40", bhk: 3, facing: "North", score: 88,
+    description: `25x40ft 3BHK North-facing vastu floor plan. Score: 88/100.
+1000 sqft plot — 3BHK at lower end of feasibility (requires compact rooms).
+Room zones: Living→N, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bedroom 3→NE-inner, Bathroom→NW, Toilet→NW, Puja nook→NE corner, Dining→E, Corridor→C.
+Key vastu features: Compact 3BHK on 25×40 — requires open-plan Living+Dining to save space. Puja is a nook within NE corner, not a full room. Kitchen SE. Master Bed SW (smallest minimum 110 sqft). Bedroom 2 in W zone. Bedroom 3 in inner NE zone (acceptable when Puja nook occupies the NE corner tip). Service rooms: only Bathroom + Toilet stacked in NW (no separate Utility at this size). Corridor is spine 3ft wide.
+AP rules constraint: 25×40 = 1000 sqft. AP_11 (3BHK feasibility: 1000 sqft minimum, open-plan mandatory). Living ≥ 160 sqft (open). Kitchen ≥ 60 sqft. Each bedroom ≥ 100 sqft.
+Door placements: Entrance North wall, East offset. Living open to Dining — no door between them. Kitchen opens East toward corridor. Master Bed opens North. Bedroom 2 opens East. Bedroom 3 opens South. Bathroom and Toilet open West to corridor.
+Window placements: Living — North window (double-width). Puja nook — East window (small, 18-inch). Kitchen — East window. Master Bed — South window. Bedroom 2 — West window. Bedroom 3 — North + East windows (inner NE zone benefits from East light).`,
+  },
 ];
 
 // ─── Door placement rules ──────────────────────────────────────────────────────

@@ -1899,7 +1899,7 @@ function switchCanvas(tabId) {
 
           {/* 3D View */}
           {tab==="3d" && (
-            <ThreeViewer layout={layout} params={params} />
+            <ThreeViewer layout={layout} params={params} furniture={furnitureData} />
           )}
 
           {/* Diff */}
