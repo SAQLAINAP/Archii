@@ -546,6 +546,11 @@ export default function App() {
   const [phase, setPhase] = useState("wizard"); // "wizard" | "generating" | "plan"
   const [showInputOverview, setShowInputOverview] = useState(false);
   const [reportReady, setReportReady] = useState(false); // HTML report CTA flag
+  const [showRenderModal, setShowRenderModal] = useState(false);
+  const [renderRoom,      setRenderRoom]      = useState("");
+  const [renderStyle,     setRenderStyle]     = useState("modern");
+  const [renderImageUrl,  setRenderImageUrl]  = useState(null);
+  const [renderLoading,   setRenderLoading]   = useState(false);
 
   // ── Phase-1 state ──────────────────────────────────────────────────────────
   const [theme, setTheme]             = useState('dark');
@@ -1097,6 +1102,44 @@ export default function App() {
     img.src = URL.createObjectURL(new Blob([svgCode], { type:"image/svg+xml" }));
   };
 
+  const exportSH3D = async () => {
+    if (!layout?.rooms?.length) return;
+    const res = await fetch("/api/export-sh3d", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rooms: layout.rooms, ...params }),
+    });
+    const xml = await res.text();
+    const blob = new Blob([xml], { type: "application/xml" });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = `ArchiAI_${params.plotW}x${params.plotH}_${params.bhk}BHK.xml`;
+    a.click();
+    URL.revokeObjectURL(href);
+  };
+
+  const handleRenderRoom = async () => {
+    if (!renderRoom) return;
+    setRenderLoading(true);
+    setRenderImageUrl(null);
+    const room = layout?.rooms?.find(r => r.name === renderRoom);
+    const res = await fetch("/api/render-room", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        roomName: renderRoom,
+        ftW: room?.ftW || 12,
+        ftH: room?.ftH || 12,
+        style: renderStyle,
+        belief: params.belief || "vastu",
+      }),
+    });
+    const data = await res.json();
+    setRenderImageUrl(data.url);
+    setRenderLoading(false);
+  };
+
   const exportPDF = ({ title = "Floor Plan Proposal", client = "", arch = "Archi AI Studio", print: doPrint = true } = {}) => {
     if (!svgCode) return;
     setShowPdfModal(false);
@@ -1637,6 +1680,44 @@ function switchCanvas(tabId) {
             >
               <span style={{ fontSize:13 }}>↗</span> VIEW REPORT
             </button>
+          )}
+
+          {/* SH3D export — visible once a plan is generated */}
+          {layout?.rooms?.length > 0 && (
+            <button
+              onClick={exportSH3D}
+              title="Export to Sweet Home 3D"
+              style={{
+                padding:"0 12px", background:"transparent",
+                border:"none", borderRight:"1px solid #1A1A2A",
+                color:"#44AAFF", fontSize:10, fontWeight:700,
+                cursor:"pointer", fontFamily:"monospace",
+                letterSpacing:"0.06em", flexShrink:0,
+              }}
+              onMouseEnter={e => e.currentTarget.style.color="#88CCFF"}
+              onMouseLeave={e => e.currentTarget.style.color="#44AAFF"}
+            >↓ SH3D</button>
+          )}
+
+          {/* Room render — visible once a plan is generated */}
+          {layout?.rooms?.length > 0 && (
+            <button
+              onClick={() => {
+                setRenderRoom(layout.rooms[0]?.name || "");
+                setRenderImageUrl(null);
+                setShowRenderModal(true);
+              }}
+              title="Generate photorealistic room render"
+              style={{
+                padding:"0 12px", background:"transparent",
+                border:"none", borderRight:"1px solid #1A1A2A",
+                color:"#DD88FF", fontSize:10, fontWeight:700,
+                cursor:"pointer", fontFamily:"monospace",
+                letterSpacing:"0.06em", flexShrink:0,
+              }}
+              onMouseEnter={e => e.currentTarget.style.color="#EEB8FF"}
+              onMouseLeave={e => e.currentTarget.style.color="#DD88FF"}
+            >◈ RENDER</button>
           )}
 
           {TABS.map((t, idx) => t.type === "sep"
@@ -2188,6 +2269,135 @@ function switchCanvas(tabId) {
           )}
         </div>
       </div>
+
+    {/* ── Room Render Modal ──────────────────────────────────────────────── */}
+    {showRenderModal && (
+      <div
+        onClick={e => { if (e.target === e.currentTarget) setShowRenderModal(false); }}
+        style={{
+          position:"fixed", inset:0, zIndex:200,
+          background:"rgba(0,0,0,0.88)",
+          display:"flex", alignItems:"center", justifyContent:"center",
+          padding:16,
+        }}
+      >
+        <div style={{
+          background:"#0A0A18", border:"1px solid #1A1A2A",
+          borderRadius:12, padding:24, width:"100%", maxWidth:540,
+          maxHeight:"90vh", overflowY:"auto",
+          fontFamily:"monospace",
+        }}>
+          {/* Header */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+            <span style={{ color:"#EEE", fontSize:13, fontWeight:700, letterSpacing:"0.06em" }}>◈ ROOM RENDER</span>
+            <button onClick={() => setShowRenderModal(false)} style={{
+              background:"none", border:"none", color:"#555", cursor:"pointer", fontSize:20, lineHeight:1,
+            }}>×</button>
+          </div>
+
+          {/* Room selector */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ color:"#555", fontSize:9, letterSpacing:"0.08em", marginBottom:6 }}>SELECT ROOM</div>
+            <select
+              value={renderRoom}
+              onChange={e => { setRenderRoom(e.target.value); setRenderImageUrl(null); }}
+              style={{
+                width:"100%", padding:"8px 10px",
+                background:"#080814", border:"1px solid #1A1A2A",
+                borderRadius:6, color:"#CCC", fontSize:11, fontFamily:"monospace",
+              }}
+            >
+              {(layout?.rooms || []).map(r => (
+                <option key={r.name} value={r.name}>
+                  {r.name} — {r.ftW}×{r.ftH} ft
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Style selector */}
+          <div style={{ marginBottom:16 }}>
+            <div style={{ color:"#555", fontSize:9, letterSpacing:"0.08em", marginBottom:8 }}>INTERIOR STYLE</div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {["modern","traditional","contemporary","luxury"].map(s => (
+                <button
+                  key={s}
+                  onClick={() => setRenderStyle(s)}
+                  style={{
+                    padding:"5px 12px", borderRadius:4,
+                    border:`1px solid ${renderStyle===s ? "#DD88FF" : "#1A1A2A"}`,
+                    background: renderStyle===s ? "#1A0A2A" : "transparent",
+                    color: renderStyle===s ? "#DD88FF" : "#555",
+                    fontSize:10, cursor:"pointer", fontFamily:"monospace",
+                    textTransform:"capitalize", letterSpacing:"0.04em",
+                    transition:"all 0.15s",
+                  }}
+                >{s}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Generate button */}
+          <button
+            onClick={handleRenderRoom}
+            disabled={renderLoading || !renderRoom}
+            style={{
+              width:"100%", padding:"10px",
+              background: renderLoading ? "#1A0A2A" : "linear-gradient(90deg,#6622AA,#9944DD)",
+              border:"none", borderRadius:6,
+              color: renderLoading ? "#885599" : "#FFF",
+              fontSize:11, fontWeight:700, cursor: renderLoading ? "not-allowed" : "pointer",
+              fontFamily:"monospace", letterSpacing:"0.06em",
+              transition:"opacity 0.15s",
+            }}
+          >
+            {renderLoading ? "RENDERING… (~15s)" : "GENERATE RENDER"}
+          </button>
+
+          {renderLoading && (
+            <div style={{ textAlign:"center", marginTop:14, color:"#555", fontSize:9 }}>
+              Flux AI is rendering your room — this takes 10–20 seconds
+            </div>
+          )}
+
+          {/* Result image */}
+          {renderImageUrl && !renderLoading && (
+            <div style={{ marginTop:18 }}>
+              <img
+                src={renderImageUrl}
+                alt={renderRoom}
+                style={{ width:"100%", borderRadius:8, display:"block",
+                  boxShadow:"0 8px 40px rgba(180,80,255,0.15)" }}
+                onError={e => { e.currentTarget.style.display="none"; }}
+              />
+              <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                <a
+                  href={renderImageUrl}
+                  download={`${renderRoom.replace(/\s+/g,"_")}_render.jpg`}
+                  target="_blank" rel="noreferrer"
+                  style={{
+                    flex:1, textAlign:"center", padding:"7px",
+                    background:"transparent", border:"1px solid #1A1A2A",
+                    borderRadius:4, color:"#888", fontSize:9,
+                    textDecoration:"none", fontFamily:"monospace",
+                    letterSpacing:"0.04em",
+                  }}
+                >↓ DOWNLOAD</a>
+                <button
+                  onClick={() => { setRenderImageUrl(null); handleRenderRoom(); }}
+                  style={{
+                    flex:1, padding:"7px",
+                    background:"transparent", border:"1px solid #1A1A2A",
+                    borderRadius:4, color:"#888", fontSize:9, cursor:"pointer",
+                    fontFamily:"monospace", letterSpacing:"0.04em",
+                  }}
+                >↺ REGENERATE</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
 
     </div>
   );

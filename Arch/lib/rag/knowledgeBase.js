@@ -181,6 +181,62 @@ Room zones: Living→N, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bedroom 3�
 Key vastu features: Perfect square allows symmetric zoning. NE quadrant has Puja with open space. SW has Master Bed. SE has Kitchen. NW has service rooms. Brahmasthan open corridor. All zones well-balanced.`,
   },
   {
+    layoutId: "20x30_1BHK_North",
+    dimension: "20x30", bhk: 1, facing: "North", score: 85,
+    description: `20x30ft 1BHK North-facing compact vastu floor plan. Score: 85/100.
+Room zones: Living→N, Kitchen→SE (open-plan), Master Bed→SW, Bathroom→NW, Puja nook→NE, Corridor→C.
+Key vastu features: Compact 600 sqft plot — open-plan kitchen merges with Living in North wing. No separate Dining (space constraint). Master Bed in SW. Bathroom NW. Puja corner in NE. Entrance on North wall.
+AP rules applied: AP_06 (1BHK: living=25-30%, bedroom=15-20%), AP_10 (open-plan kitchen enforced — no enclosing walls). Kitchen flows directly into living area. Bathroom 45 sqft absolute.
+Door placements: Entrance North wall center. Bedroom door opens East. Bathroom door opens East. Kitchen open to living — no door.
+Window placements: Living — North window. Kitchen — East window mandatory. Bedroom — South window only (SW zone).`,
+  },
+  {
+    layoutId: "25x40_2BHK_East",
+    dimension: "25x40", bhk: 2, facing: "East", score: 88,
+    description: `25x40ft 2BHK East-facing vastu floor plan. Score: 88/100.
+Room zones: Bedroom 2→N, Living→E, Kitchen→SE, Master Bed→SW, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→E, Master Bath→S, Corridor→C.
+Key vastu features: East entrance receives morning sun — most auspicious. Living in East wing. Puja NE with first morning light. Kitchen SE. Master Bed SW. Three service rooms stacked NW. Corridor center (Brahmasthan open).
+Door placements: Entrance East wall, North half. Living faces East. All rooms open toward central corridor. Kitchen door West wall.
+Window placements: Living — large East window. Kitchen — East window. Puja — East window. Master Bed — South window. Bedroom 2 (N) — North and East windows.`,
+  },
+  {
+    layoutId: "25x50_3BHK_East",
+    dimension: "25x50", bhk: 3, facing: "East", score: 90,
+    description: `25x50ft 3BHK East-facing vastu floor plan. Score: 90/100.
+Room zones: Bedroom 3→N, Living→E, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→S, Master Bath→S, Corridor→C.
+Key vastu features: Long narrow plot (25 wide × 50 deep). East entrance. Living in East half. Puja NE. Kitchen SE. Master Bed SW. Two secondary bedrooms in N and W zones. Three service rooms consolidated in NW corner. Dining in South. Brahmasthan corridor central.
+Door placements: Entrance East wall. Rooms open South wall toward corridor. Kitchen opens West.
+Window placements: Living and Puja — East windows. Kitchen — East window. Master Bed — South only. Bedroom 2 (W) — West window. Bedroom 3 (N) — North window.`,
+  },
+  {
+    layoutId: "30x40_3BHK_South",
+    dimension: "30x40", bhk: 3, facing: "South", score: 87,
+    description: `30x40ft 3BHK South-facing vastu floor plan. Score: 87/100.
+Room zones: Living→SE, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bedroom 3→N, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→E, Master Bath→S, Corridor→C.
+Key vastu features: South-facing requires extra care. Entrance placed in SE portion of South wall (NOT SW — that is harmful). Heavier construction on South and West. Kitchen SE (double benefit — Agneya zone + South-facing plot). Master Bed SW critical. Puja NE. Living in SE wing. No heavy structure in NE.
+Door placements: Entrance South wall, East half (SE). All rooms connect to central corridor. Kitchen door North wall.
+Window placements: Puja — East window. Kitchen — East window. Living — East-facing windows preferred. Master Bed — West window (SW zone). Bedrooms N/W — North/West windows.`,
+  },
+  {
+    layoutId: "30x40_3BHK_West",
+    dimension: "30x40", bhk: 3, facing: "West", score: 86,
+    description: `30x40ft 3BHK West-facing vastu floor plan. Score: 86/100.
+Room zones: Living→W, Kitchen→SE, Master Bed→SW, Bedroom 2→N, Bedroom 3→E, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→S, Master Bath→S, Corridor→C.
+Key vastu features: West-facing is acceptable but less ideal. Entrance in NW half of West wall. Living room in West wing. Keep North and East sides lighter. Master Bed SW. Kitchen SE. Puja NE. Bedroom 2 in North (good — lighter zone). Bedroom 3 in East zone.
+Door placements: Entrance West wall, North half. Living faces West entrance. Kitchen opens North. All rooms connect via central corridor.
+Window placements: Puja — East window. Kitchen — East window mandatory. Living — West windows (entrance side). Bedrooms N and E — North/East windows preferred.`,
+  },
+  {
+    layoutId: "40x50_4BHK_North",
+    dimension: "40x50", bhk: 4, facing: "North", score: 91,
+    description: `40x50ft 4BHK North-facing vastu floor plan. Score: 91/100.
+Room zones: Living→N, Kitchen→SE, Master Bed→SW, Bedroom 2→W, Bedroom 3→E, Bedroom 4→W, Bathroom→NW, Toilet→NW, Utility→NW, Puja→NE, Dining→S, Master Bath→S, Family Room→C, Corridor→C.
+Key vastu features: Large plot allows a family lounge in the Brahmasthan (center) while maintaining Vastu — acceptable when surrounded by rooms on all sides. Puja fills NE. Three service rooms in NW column. Living spans full North. Kitchen in SE. Master Bed SW with attached bath. Four bedrooms: 2 in W zone, 1 in E, 1 in NW (upper floor if 2-storey).
+Staircase if 2-floor: SW zone, 14 steps, rises East to West, labeled "UP 14 STEPS".
+Door placements: Entrance North wall, East half. Family room central, open arches to Living. All bedrooms face corridor. Puja faces East.
+Window placements: Living — North + East. Kitchen — East. Puja — East. Master Bed — South. Secondary bedrooms — East or North preferred.`,
+  },
+  {
     layoutId: "50x80_5BHK_North",
     dimension: "50x80", bhk: 5, facing: "North", score: 88,
     description: `50x80ft 5BHK North-facing large plot vastu floor plan. Score: 88/100.
