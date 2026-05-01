@@ -1,4 +1,4 @@
-// ─── Vastu AI — Islamic Architectural Design Terms ────────────────────────────
+// ─── ArchiAI — Islamic Architectural Design Terms ────────────────────────────
 // 28 Islamic residential architecture glossary terms with Arabic script,
 // transliterations, definitions, and practical residential design tips.
 //

@@ -1,4 +1,4 @@
-// ─── Vastu AI — Glossary of Terms ────────────────────────────────────────────
+// ─── ArchiAI — Glossary of Terms ────────────────────────────────────────────
 // 32 Vastu Shastra and architectural terms with definitions, tips, and
 // cross-references. Displayed in the in-app Glossary panel.
 //

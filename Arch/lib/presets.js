@@ -1,4 +1,4 @@
-// ─── Vastu AI — Presets, Archetypes & Plot Shapes ────────────────────────────
+// ─── ArchiAI — Presets, Archetypes & Plot Shapes ────────────────────────────
 // Data file for the preset browser. Three collections:
 //   VASTU_PRESETS  – 15 standard residential layouts
 //   ARCHETYPES     – 6 regional Indian architectural traditions

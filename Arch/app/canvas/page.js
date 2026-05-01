@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import ArchiLogo from "../../components/ArchiLogo";
 
 // ── Color palette for rooms ───────────────────────────────────────────────────
 const ROOM_PALETTE = [
@@ -596,10 +597,7 @@ export default function CanvasPage() {
           >
             ← Back
           </button>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontSize: 20, color: "#E8E8F4", fontFamily: "Georgia, serif" }}>{selectedBelief.navTitle}</span>
-            <span style={{ fontSize: 20, color: selectedBelief.navAccent, fontFamily: "Georgia, serif", fontWeight: 700 }}>AI</span>
-          </div>
+          <ArchiLogo size={24} textSize={13} href="/" />
         </div>
 
         {/* Right: nav links */}

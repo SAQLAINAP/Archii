@@ -1,4 +1,4 @@
-// ─── Vastu AI — Christian Architectural Design Terms ──────────────────────────
+// ─── ArchiAI — Christian Architectural Design Terms ──────────────────────────
 // 28 Christian residential and sacred architecture glossary terms with Latin,
 // definitions, and practical residential design tips.
 //
