@@ -1,213 +1,214 @@
 "use client";
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
-import { OrbitControls, Text, Sky, Grid } from "@react-three/drei";
+import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const WALL_H       = 9;      // ceiling height in feet
-const WALL_T       = 0.25;   // wall thickness in feet
-const FLOOR_T      = 0.05;
-const LABEL_Y      = WALL_H + 0.8;
-const WALK_SPEED   = 8;      // ft/s
-const WALK_HEIGHT  = 5.5;    // eye level in feet
+const WALL_H     = 9;      // ceiling height ft
+const WALL_T     = 0.22;   // wall thickness ft
+const FLOOR_T    = 0.08;
+const WALK_SPEED = 10;
+const EYE_H      = 5.5;
 
-// ─── Room mesh: floor + 4 walls ───────────────────────────────────────────────
-function Room({ room, cx, cz, selected, onClick }) {
+// ─── Scene background setter ──────────────────────────────────────────────────
+function SceneBackground({ color }) {
+  const { scene } = useThree();
+  useEffect(() => {
+    scene.background = new THREE.Color(color);
+    return () => { scene.background = null; };
+  }, [scene, color]);
+  return null;
+}
+
+// ─── Ground plane ─────────────────────────────────────────────────────────────
+function Ground({ size }) {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+      <planeGeometry args={[size * 4, size * 4, 32, 32]} />
+      <meshStandardMaterial color="#D4CFC8" roughness={1} />
+    </mesh>
+  );
+}
+
+// ─── Single room ─────────────────────────────────────────────────────────────
+function Room({ room, cx, cz, selected, onSelect }) {
   const { ftW, ftH, color, name } = room;
   const rx = room.x / 10 - cx + ftW / 2;
   const rz = room.y / 10 - cz + ftH / 2;
 
-  const floorColor = new THREE.Color(color || "#B8C8B8");
-  const wallColor  = new THREE.Color("#EDEAE4");
-
   return (
-    <group position={[rx, 0, rz]} onClick={onClick}>
-      {/* Floor */}
-      <mesh receiveShadow position={[0, FLOOR_T / 2, 0]}>
-        <boxGeometry args={[ftW, FLOOR_T, ftH]} />
-        <meshStandardMaterial color={floorColor} roughness={0.8} metalness={0} />
+    <group position={[rx, 0, rz]}>
+      {/* Floor slab */}
+      <mesh
+        receiveShadow
+        position={[0, FLOOR_T / 2, 0]}
+        onClick={e => { e.stopPropagation(); onSelect(name); }}
+      >
+        <boxGeometry args={[ftW - WALL_T, FLOOR_T, ftH - WALL_T]} />
+        <meshStandardMaterial color={color || "#B8C8B8"} roughness={0.85} />
       </mesh>
 
-      {/* North wall */}
-      <mesh castShadow position={[0, WALL_H / 2, -ftH / 2 + WALL_T / 2]}>
+      {/* N wall */}
+      <mesh castShadow position={[0, WALL_H / 2, -(ftH / 2 - WALL_T / 2)]}>
         <boxGeometry args={[ftW, WALL_H, WALL_T]} />
-        <meshStandardMaterial color={wallColor} roughness={0.9} />
+        <meshStandardMaterial color="#EDEAE4" roughness={0.9} />
       </mesh>
-      {/* South wall */}
+      {/* S wall */}
       <mesh castShadow position={[0, WALL_H / 2, ftH / 2 - WALL_T / 2]}>
         <boxGeometry args={[ftW, WALL_H, WALL_T]} />
-        <meshStandardMaterial color={wallColor} roughness={0.9} />
+        <meshStandardMaterial color="#E8E4DC" roughness={0.9} />
       </mesh>
-      {/* West wall */}
-      <mesh castShadow position={[-ftW / 2 + WALL_T / 2, WALL_H / 2, 0]}>
+      {/* W wall */}
+      <mesh castShadow position={[-(ftW / 2 - WALL_T / 2), WALL_H / 2, 0]}>
         <boxGeometry args={[WALL_T, WALL_H, ftH]} />
-        <meshStandardMaterial color={wallColor} roughness={0.9} />
+        <meshStandardMaterial color="#EDEAE4" roughness={0.9} />
       </mesh>
-      {/* East wall */}
+      {/* E wall */}
       <mesh castShadow position={[ftW / 2 - WALL_T / 2, WALL_H / 2, 0]}>
         <boxGeometry args={[WALL_T, WALL_H, ftH]} />
-        <meshStandardMaterial color={wallColor} roughness={0.9} />
+        <meshStandardMaterial color="#E8E4DC" roughness={0.9} />
       </mesh>
 
-      {/* Selection highlight ring */}
+      {/* Selection glow ring */}
       {selected && (
-        <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[Math.min(ftW, ftH) * 0.3, Math.min(ftW, ftH) * 0.35, 32]} />
-          <meshBasicMaterial color="#4488FF" transparent opacity={0.7} />
+        <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[Math.min(ftW, ftH) * 0.25, Math.min(ftW, ftH) * 0.32, 32]} />
+          <meshBasicMaterial color="#4488FF" transparent opacity={0.8} side={THREE.DoubleSide} />
         </mesh>
       )}
 
-      {/* Room label */}
-      <Text
-        position={[0, LABEL_Y, 0]}
-        fontSize={1.1}
-        color="#222222"
-        anchorX="center"
-        anchorY="middle"
-        font={undefined}
-        renderOrder={1}
+      {/* HTML label — no font loading needed */}
+      <Html
+        position={[0, WALL_H + 1.2, 0]}
+        center
+        distanceFactor={28}
+        occlude={false}
+        style={{ pointerEvents: "none", userSelect: "none" }}
       >
-        {name}
-      </Text>
-      <Text
-        position={[0, LABEL_Y - 1.3, 0]}
-        fontSize={0.75}
-        color="#666666"
-        anchorX="center"
-        anchorY="middle"
-        renderOrder={1}
-      >
-        {`${ftW}×${ftH} ft`}
-      </Text>
+        <div style={{
+          background: "rgba(8,8,20,0.78)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 5, padding: "3px 8px",
+          color: "#EEE", fontSize: 11, fontFamily: "monospace",
+          fontWeight: 700, whiteSpace: "nowrap", letterSpacing: "0.03em",
+        }}>
+          {name}
+          <span style={{ color:"#888", fontWeight:400, marginLeft:5 }}>
+            {ftW}×{ftH}
+          </span>
+        </div>
+      </Html>
     </group>
   );
 }
 
-// ─── First-person WASD controller ────────────────────────────────────────────
-function WalkthroughController({ active, startPos }) {
+// ─── North label ──────────────────────────────────────────────────────────────
+function NorthLabel({ x, z }) {
+  return (
+    <Html position={[x, 1, z]} center distanceFactor={28} style={{ pointerEvents:"none" }}>
+      <div style={{
+        color:"#CC2222", fontWeight:900, fontSize:15,
+        fontFamily:"monospace", textShadow:"0 0 6px rgba(0,0,0,0.5)",
+      }}>N ↑</div>
+    </Html>
+  );
+}
+
+// ─── First-person walker ──────────────────────────────────────────────────────
+function WalkController({ active }) {
   const { camera, gl } = useThree();
-  const keys    = useRef({});
-  const pitch   = useRef(0);
-  const yaw     = useRef(0);
-  const started = useRef(false);
+  const keys  = useRef({});
+  const yaw   = useRef(0);
+  const pitch = useRef(0);
 
   useEffect(() => {
     if (!active) return;
-
-    const onKey = e => { keys.current[e.code] = e.type === "keydown"; };
-    const onMove = e => {
-      if (document.pointerLockElement !== gl.domElement) return;
-      yaw.current   -= e.movementX * 0.002;
-      pitch.current -= e.movementY * 0.002;
-      pitch.current  = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitch.current));
-    };
-    const onClick = () => {
-      if (!started.current) gl.domElement.requestPointerLock();
-    };
-
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("keyup",   onKey);
-    document.addEventListener("mousemove", onMove);
-    gl.domElement.addEventListener("click", onClick);
-
-    camera.position.set(...startPos);
     camera.rotation.order = "YXZ";
-    started.current = false;
-
+    const down = e => { keys.current[e.code] = true; };
+    const up   = e => { keys.current[e.code] = false; };
+    const move = e => {
+      if (document.pointerLockElement !== gl.domElement) return;
+      yaw.current   -= e.movementX * 0.0022;
+      pitch.current -= e.movementY * 0.0022;
+      pitch.current  = Math.max(-1.1, Math.min(1.1, pitch.current));
+    };
+    const click = () => gl.domElement.requestPointerLock();
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    document.addEventListener("mousemove", move);
+    gl.domElement.addEventListener("click", click);
     return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("keyup",   onKey);
-      document.removeEventListener("mousemove", onMove);
-      gl.domElement.removeEventListener("click", onClick);
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      document.removeEventListener("mousemove", move);
+      gl.domElement.removeEventListener("click", click);
       if (document.pointerLockElement) document.exitPointerLock();
     };
-  }, [active, gl, camera, startPos]);
+  }, [active, camera, gl]);
 
-  useFrame((_, delta) => {
+  useFrame((_, dt) => {
     if (!active) return;
     camera.rotation.set(pitch.current, yaw.current, 0);
-
-    const speed = WALK_SPEED * delta;
-    const dir   = new THREE.Vector3();
-    const front = new THREE.Vector3(-Math.sin(yaw.current), 0, -Math.cos(yaw.current));
-    const right = new THREE.Vector3( Math.cos(yaw.current), 0, -Math.sin(yaw.current));
-
-    if (keys.current["KeyW"] || keys.current["ArrowUp"])   dir.addScaledVector(front,  speed);
-    if (keys.current["KeyS"] || keys.current["ArrowDown"])  dir.addScaledVector(front, -speed);
-    if (keys.current["KeyA"] || keys.current["ArrowLeft"])  dir.addScaledVector(right, -speed);
-    if (keys.current["KeyD"] || keys.current["ArrowRight"]) dir.addScaledVector(right,  speed);
-
-    camera.position.addScaledVector(dir, 1);
-    camera.position.y = WALK_HEIGHT;
+    const spd = WALK_SPEED * dt;
+    const fwd = new THREE.Vector3(-Math.sin(yaw.current), 0, -Math.cos(yaw.current));
+    const rgt = new THREE.Vector3( Math.cos(yaw.current), 0, -Math.sin(yaw.current));
+    if (keys.current.KeyW  || keys.current.ArrowUp)    camera.position.addScaledVector(fwd,  spd);
+    if (keys.current.KeyS  || keys.current.ArrowDown)  camera.position.addScaledVector(fwd, -spd);
+    if (keys.current.KeyA  || keys.current.ArrowLeft)  camera.position.addScaledVector(rgt, -spd);
+    if (keys.current.KeyD  || keys.current.ArrowRight) camera.position.addScaledVector(rgt,  spd);
+    camera.position.y = EYE_H;
   });
 
   return null;
 }
 
-// ─── North arrow label ────────────────────────────────────────────────────────
-function NorthArrow({ cx, cz, totalFtW, totalFtH }) {
-  return (
-    <group position={[totalFtW / 2 - cx + 3, 0.1, -totalFtH / 2 - cz - 4]}>
-      <Text fontSize={1.4} color="#CC2222" anchorX="center" anchorY="middle">N ↑</Text>
-    </group>
-  );
-}
-
-// ─── Scene ────────────────────────────────────────────────────────────────────
-function Scene({ rooms, totalFtW, totalFtH, walkMode, selectedRoom, setSelectedRoom }) {
+// ─── Main scene ───────────────────────────────────────────────────────────────
+function Scene({ rooms, totalFtW, totalFtH, walkMode, selected, onSelect }) {
   const cx = totalFtW / 2;
   const cz = totalFtH / 2;
 
-  const startPos = [0, WALK_HEIGHT, cz + 5];
-
   return (
     <>
-      <Sky sunPosition={[100, 80, 100]} turbidity={4} rayleigh={0.5} />
-      <ambientLight intensity={0.7} />
+      <SceneBackground color="#B8CCE0" />
+
+      <ambientLight intensity={0.9} />
+      <hemisphereLight args={["#DDEEFF", "#8899AA", 0.6]} />
       <directionalLight
-        position={[totalFtW, 40, totalFtH]}
-        intensity={1.2}
+        position={[totalFtW * 0.8, 60, totalFtH * 0.8]}
+        intensity={1.4}
         castShadow
         shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-totalFtW}
+        shadow-camera-right={totalFtW}
+        shadow-camera-top={totalFtH}
+        shadow-camera-bottom={-totalFtH}
       />
-      <pointLight position={[0, WALL_H - 1, 0]} intensity={0.4} decay={2} />
 
-      <Grid
-        position={[0, 0, 0]}
-        args={[totalFtW + 20, totalFtH + 20]}
-        cellSize={1}
-        cellThickness={0.3}
-        cellColor="#CCCCCC"
-        sectionSize={10}
-        sectionThickness={0.8}
-        sectionColor="#AAAAAA"
-        fadeDistance={120}
-        infiniteGrid
-      />
+      <Ground size={Math.max(totalFtW, totalFtH)} />
 
       {rooms.map((room, i) => (
         <Room
-          key={room.name + i}
+          key={`${room.name}-${i}`}
           room={room}
           cx={cx} cz={cz}
-          selected={selectedRoom === room.name}
-          onClick={() => setSelectedRoom(r => r === room.name ? null : room.name)}
+          selected={selected === room.name}
+          onSelect={onSelect}
         />
       ))}
 
-      <NorthArrow cx={cx} cz={cz} totalFtW={totalFtW} totalFtH={totalFtH} />
+      <NorthLabel x={totalFtW / 2 - cx + 4} z={-(totalFtH / 2 - cz) - 5} />
 
       {walkMode
-        ? <WalkthroughController active={true} startPos={startPos} />
+        ? <WalkController active />
         : <OrbitControls
             makeDefault
-            target={[0, 0, 0]}
-            minDistance={5}
-            maxDistance={totalFtW * 3}
-            maxPolarAngle={Math.PI / 2 - 0.05}
+            target={[0, 2, 0]}
+            minDistance={4}
+            maxDistance={totalFtW * 4}
+            maxPolarAngle={Math.PI / 2 - 0.02}
             enableDamping
-            dampingFactor={0.08}
+            dampingFactor={0.07}
           />
       }
     </>
@@ -216,100 +217,129 @@ function Scene({ rooms, totalFtW, totalFtH, walkMode, selectedRoom, setSelectedR
 
 // ─── Exported component ───────────────────────────────────────────────────────
 export default function ThreeViewer({ layout, params }) {
-  const [walkMode,      setWalkMode]      = useState(false);
-  const [selectedRoom,  setSelectedRoom]  = useState(null);
+  const [walkMode,  setWalkMode]  = useState(false);
+  const [selected,  setSelected]  = useState(null);
   const containerRef = useRef(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+
+  // Measure container so Canvas always gets explicit pixel dimensions
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setSize({ w: Math.round(width), h: Math.round(height) });
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   if (!layout?.rooms?.length) {
     return (
       <div style={{
-        flex:1, display:"flex", alignItems:"center", justifyContent:"center",
-        background:"#080814", color:"#333", fontFamily:"monospace", fontSize:11,
+        flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+        background: "#080814", color: "#333", fontFamily: "monospace", fontSize: 11,
       }}>
         Generate a plan first to view in 3D
       </div>
     );
   }
 
-  const rooms     = layout.rooms;
-  const totalFtW  = (layout.W || 400) / 10;
-  const totalFtH  = (layout.H || 400) / 10;
-  const selected  = rooms.find(r => r.name === selectedRoom);
+  const rooms    = layout.rooms;
+  const totalFtW = (layout.W || 300) / 10;
+  const totalFtH = (layout.H || 400) / 10;
+  const selRoom  = rooms.find(r => r.name === selected);
+
+  // Initial camera: angled overhead view
+  const camY = totalFtH * 1.2;
+  const camZ = totalFtH * 1.5;
 
   return (
-    <div ref={containerRef} style={{ flex:1, position:"relative", background:"#C8D8E8", overflow:"hidden" }}>
+    <div
+      ref={containerRef}
+      style={{ flex: 1, position: "relative", background: "#B8CCE0", overflow: "hidden" }}
+    >
+      {size.w > 0 && size.h > 0 && (
+        <Canvas
+          shadows
+          camera={{ position: [0, camY, camZ], fov: 52, near: 0.3, far: 3000 }}
+          style={{ position: "absolute", inset: 0 }}
+          gl={{ antialias: true, alpha: false }}
+          onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
+        >
+          <Scene
+            rooms={rooms}
+            totalFtW={totalFtW}
+            totalFtH={totalFtH}
+            walkMode={walkMode}
+            selected={selected}
+            onSelect={n => setSelected(s => s === n ? null : n)}
+          />
+        </Canvas>
+      )}
 
-      {/* Three.js Canvas */}
-      <Canvas
-        shadows
-        camera={{ position: [0, totalFtH * 1.1, totalFtH * 1.4], fov: 55, near: 0.5, far: 2000 }}
-        style={{ width:"100%", height:"100%" }}
-        gl={{ antialias: true }}
-      >
-        <Scene
-          rooms={rooms}
-          totalFtW={totalFtW}
-          totalFtH={totalFtH}
-          walkMode={walkMode}
-          selectedRoom={selectedRoom}
-          setSelectedRoom={setSelectedRoom}
-        />
-      </Canvas>
-
-      {/* HUD — top left */}
+      {/* Top-left info */}
       <div style={{
-        position:"absolute", top:12, left:12,
-        display:"flex", flexDirection:"column", gap:6,
-        fontFamily:"monospace", pointerEvents:"none",
+        position: "absolute", top: 12, left: 12,
+        display: "flex", flexDirection: "column", gap: 6,
+        fontFamily: "monospace", pointerEvents: "none", zIndex: 10,
       }}>
         <div style={{
-          background:"rgba(0,0,0,0.55)", borderRadius:6,
-          padding:"5px 10px", color:"#CCC", fontSize:9, letterSpacing:"0.06em",
+          background: "rgba(0,0,0,0.55)", borderRadius: 6,
+          padding: "5px 10px", color: "#CCC", fontSize: 9, letterSpacing: "0.06em",
         }}>
           {params?.plotW}×{params?.plotH}ft · {params?.bhk}BHK · {params?.facing}-facing
         </div>
         {walkMode && (
           <div style={{
-            background:"rgba(0,0,0,0.55)", borderRadius:6,
-            padding:"5px 10px", color:"#88FFCC", fontSize:9, letterSpacing:"0.05em",
+            background: "rgba(0,0,0,0.55)", borderRadius: 6,
+            padding: "5px 10px", color: "#88FFCC", fontSize: 9,
           }}>
-            Click canvas to lock mouse · WASD move · ESC exit
+            Click canvas · WASD move · ESC exit
           </div>
         )}
       </div>
 
-      {/* HUD — top right controls */}
-      <div style={{
-        position:"absolute", top:12, right:12,
-        display:"flex", gap:6,
-      }}>
+      {/* Top-right: Walk toggle */}
+      <div style={{ position: "absolute", top: 12, right: 12, zIndex: 10 }}>
         <button
-          onClick={() => { setWalkMode(w => !w); setSelectedRoom(null); }}
+          onClick={() => { setWalkMode(w => !w); setSelected(null); }}
           style={{
-            padding:"6px 12px",
-            background: walkMode ? "#1A3A2A" : "rgba(0,0,0,0.6)",
-            border:`1px solid ${walkMode ? "#44DD88" : "#333"}`,
-            borderRadius:6, color: walkMode ? "#44DD88" : "#AAA",
-            fontSize:10, cursor:"pointer", fontFamily:"monospace",
-            letterSpacing:"0.05em", fontWeight:700,
+            padding: "6px 14px",
+            background: walkMode ? "rgba(20,50,30,0.85)" : "rgba(0,0,0,0.6)",
+            border: `1px solid ${walkMode ? "#44DD88" : "#444"}`,
+            borderRadius: 6,
+            color: walkMode ? "#44DD88" : "#AAA",
+            fontSize: 10, cursor: "pointer", fontFamily: "monospace",
+            fontWeight: 700, letterSpacing: "0.05em",
           }}
         >
           {walkMode ? "↩ ORBIT" : "⚑ WALK"}
         </button>
       </div>
 
-      {/* Selected room info panel */}
-      {selected && !walkMode && (
+      {/* Bottom: selected room info */}
+      {selRoom && !walkMode && (
         <div style={{
-          position:"absolute", bottom:16, left:"50%", transform:"translateX(-50%)",
-          background:"rgba(8,8,20,0.9)", border:"1px solid #1A1A2A",
-          borderRadius:8, padding:"10px 18px",
-          fontFamily:"monospace", display:"flex", gap:20, alignItems:"center",
+          position: "absolute", bottom: 16,
+          left: "50%", transform: "translateX(-50%)",
+          background: "rgba(8,8,20,0.88)",
+          border: "1px solid #1A1A2A",
+          borderRadius: 8, padding: "9px 20px",
+          fontFamily: "monospace",
+          display: "flex", gap: 18, alignItems: "center",
+          zIndex: 10,
         }}>
-          <div style={{ width:12, height:12, borderRadius:2, background:selected.color, flexShrink:0 }}/>
-          <span style={{ color:"#EEE", fontSize:11, fontWeight:700 }}>{selected.name}</span>
-          <span style={{ color:"#666", fontSize:10 }}>{selected.ftW} × {selected.ftH} ft</span>
-          <span style={{ color:"#666", fontSize:10 }}>{(selected.ftW * selected.ftH).toFixed(0)} sqft</span>
+          <div style={{
+            width: 11, height: 11, borderRadius: 2,
+            background: selRoom.color, flexShrink: 0,
+          }} />
+          <span style={{ color: "#EEE", fontSize: 11, fontWeight: 700 }}>{selRoom.name}</span>
+          <span style={{ color: "#666", fontSize: 10 }}>{selRoom.ftW} × {selRoom.ftH} ft</span>
+          <span style={{ color: "#555", fontSize: 10 }}>{(selRoom.ftW * selRoom.ftH).toFixed(0)} sqft</span>
+          <button
+            onClick={() => setSelected(null)}
+            style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 14 }}
+          >×</button>
         </div>
       )}
     </div>
