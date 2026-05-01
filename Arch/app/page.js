@@ -281,68 +281,76 @@ export default function LandingPage() {
       <nav style={{
         position:'fixed', top:12, left:'50%', transform:'translateX(-50%)',
         zIndex:200,
-        display:'flex', alignItems:'center', gap:0,
-        padding:'0 18px',
-        height:46,
-        background:'rgba(8,8,20,0.88)', backdropFilter:'blur(16px)',
+        display:'flex', alignItems:'center',
+        padding:'0 20px',
+        height:48,
+        background:'rgba(8,8,20,0.90)', backdropFilter:'blur(18px)',
         border:'1px solid rgba(255,255,255,0.07)',
-        borderRadius:12,
+        borderRadius:14,
         boxShadow:'0 4px 32px rgba(0,0,0,0.5)',
         maxWidth:'calc(100vw - 32px)',
+        whiteSpace:'nowrap',
       }}>
         {/* Brand */}
         <ArchiLogo size={22} textSize={13} href="/"/>
 
         {/* Divider */}
-        <div style={{ width:1, height:20, background:'#1A1A2A', margin:'0 14px' }}/>
+        <div style={{ width:1, height:22, background:'#1E1E30', margin:'0 18px' }}/>
 
         {/* Nav links */}
-        {[
-          { href:'/app',         label:'Studio',       color:'#4488FF' },
-          { href:'/presets',     label:'Presets',      color:'#44DD88' },
-          { href:'/beliefs',     label:'Beliefs',      color:'#FFAA22' },
-          { href:'/canvas',      label:'Canvas Check', color:'#CC66FF' },
-          { href:'/regulations', label:'Regulations',  color:'#22DDEE' },
-          { href:'/dashboard',   label:'Dashboard',    color:'#888899' },
-        ].map(link => (
-          <a key={link.href} href={link.href} style={{
-            color: link.color, fontSize:10.5, fontWeight:600,
-            textDecoration:'none', fontFamily:'monospace',
-            letterSpacing:'0.05em', opacity:0.75,
-            padding:'0 10px', height:46,
-            display:'flex', alignItems:'center',
-            transition:'opacity 0.15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.opacity='1'}
-          onMouseLeave={e => e.currentTarget.style.opacity='0.75'}
-          >{link.label}</a>
-        ))}
+        <div style={{ display:'flex', alignItems:'center', gap:2 }}>
+          {[
+            { href:'/app',         label:'Studio',       color:'#4488FF' },
+            { href:'/presets',     label:'Presets',      color:'#44DD88' },
+            { href:'/beliefs',     label:'Beliefs',      color:'#FFAA22' },
+            { href:'/canvas',      label:'Canvas',       color:'#CC66FF' },
+            { href:'/regulations', label:'Regulations',  color:'#22DDEE' },
+            { href:'/dashboard',   label:'Dashboard',    color:'#888899' },
+          ].map(link => (
+            <a key={link.href} href={link.href} style={{
+              color: link.color, fontSize:11, fontWeight:600,
+              textDecoration:'none', fontFamily:'monospace',
+              letterSpacing:'0.04em', opacity:0.72,
+              padding:'0 13px', height:48,
+              display:'flex', alignItems:'center',
+              whiteSpace:'nowrap',
+              transition:'opacity 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity='1'}
+            onMouseLeave={e => e.currentTarget.style.opacity='0.72'}
+            >{link.label}</a>
+          ))}
+        </div>
 
         {/* Divider */}
-        <div style={{ width:1, height:20, background:'#1A1A2A', margin:'0 6px 0 4px' }}/>
+        <div style={{ width:1, height:22, background:'#1E1E30', margin:'0 16px' }}/>
 
-        {/* Provider pills */}
-        {[
-          { label:'Claude', color:'#CC8855' },
-          { label:'Gemini', color:'#4488FF' },
-          { label:'Groq',   color:'#44DD88' },
-          { label:'NIM',    color:'#CC66FF' },
-        ].map((p, i) => (
-          <div key={p.label} style={{
-            display:'inline-flex', alignItems:'center', gap:5,
-            padding:'3px 9px', borderRadius:20,
-            border:`1px solid ${p.color}35`,
-            fontSize:9.5, fontFamily:'monospace',
-            color:p.color, letterSpacing:'0.04em',
-            marginLeft:4,
-          }}>
-            <div style={{
-              width:5, height:5, borderRadius:'50%', background:p.color,
-              animation:`dotPulse 2s ease-in-out ${i*0.5}s infinite`,
-            }}/>
-            {p.label}
-          </div>
-        ))}
+        {/* Provider pills — compact dot + label, evenly spaced */}
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          {[
+            { label:'Claude', color:'#CC8855' },
+            { label:'Gemini', color:'#4488FF' },
+            { label:'Groq',   color:'#44DD88' },
+            { label:'NIM',    color:'#CC66FF' },
+          ].map((p, i) => (
+            <div key={p.label} style={{
+              display:'inline-flex', alignItems:'center', gap:5,
+              padding:'4px 10px', borderRadius:20,
+              border:`1px solid ${p.color}30`,
+              background:`${p.color}08`,
+              fontSize:9.5, fontFamily:'monospace',
+              color:p.color, letterSpacing:'0.04em',
+              whiteSpace:'nowrap',
+            }}>
+              <div style={{
+                width:5, height:5, borderRadius:'50%', background:p.color,
+                animation:`dotPulse 2s ease-in-out ${i*0.5}s infinite`,
+                flexShrink:0,
+              }}/>
+              {p.label}
+            </div>
+          ))}
+        </div>
       </nav>
 
       {/* Google Font */}
