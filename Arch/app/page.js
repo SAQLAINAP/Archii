@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ArchiLogo from "../components/ArchiLogo";
+import LandAdvisorChat from "../components/LandAdvisorChat";
 
 /** Hero headline: cycling prefix (Vastu, Mīmārī, Christian, municipal / codes). */
 const HERO_PREFIX_WORDS = [
@@ -623,6 +624,9 @@ export default function LandingPage() {
           Built for Indian residential architecture · Vastu Shastra × Generative AI
         </div>
       </main>
+
+      {/* Floating Land Advisor chatbot */}
+      <LandAdvisorChat />
     </div>
   );
 }
