@@ -365,15 +365,78 @@ const FUN_FACTS = [
   "The golden ratio (1:1.618) appears in traditional Indian doorway proportions across many styles.",
 ];
 
-const AGENT_LABELS = {
-  input:    'Parsing constraints',
-  spatial:  'Planning layout',
-  rag:      'Retrieving vastu knowledge',
-  svg:      'Rendering floor plan',
-  vastu:    'Auditing Vastu',
-  cost:     'Estimating cost',
-  furniture:'Placing furniture',
-};
+function buildAgentLabels(belief) {
+  const b = {
+    vastu:     { short:'Vastu',        rag:'vastu',            spatial:'Vastu-optimised'  },
+    islamic:   { short:'Islāmī Mīmārī', rag:'Islāmī Mīmārī',   spatial:'Islāmī'           },
+    christian: { short:'Sacred Christian', rag:'sacred design', spatial:'sacred'           },
+    universal: { short:'Universal Design', rag:'universal design', spatial:'accessible'   },
+  }[belief] || { short:'Vastu', rag:'vastu', spatial:'Vastu-optimised' };
+  return {
+    input:    'Parsing constraints',
+    spatial:  `Planning ${b.spatial} layout`,
+    rag:      `Retrieving ${b.rag} knowledge`,
+    svg:      'Rendering floor plan',
+    vastu:    `Auditing ${b.short}`,
+    cost:     'Estimating cost',
+    furniture:'Placing furniture',
+  };
+}
+
+const FACTS_VASTU = [
+  "Vastu Shastra dates back 5,000+ years — older than the Roman Colosseum.",
+  "The north-east corner (Ishanya) is reserved for prayer rooms — it receives the most positive cosmic energy.",
+  "Indian residential buildings lose up to 23% resale value when they violate core Vastu zone rules.",
+  "The south-west corner is the 'Brahmasthan' zone — ideal for master bedrooms and load-bearing walls.",
+  "Kitchen in the south-east (Agni corner) aligns with fire energy — reducing cooking-related Vastu doshas.",
+  "Good east-facing plots receive morning light in living areas — associated with health & prosperity.",
+  "North-facing kitchens are a Vastu violation — Vayu (air) energy conflicts with Agni (fire).",
+  "The golden ratio (1:1.618) appears in traditional Indian doorway proportions across many styles.",
+];
+const FACTS_ISLAMIC = [
+  "Islāmī Mīmārī architecture dates back 1,400+ years with origins in the Arabian Peninsula.",
+  "The sahn (central courtyard) provides natural cooling and a spiritual focal point in Islamic homes.",
+  "Geometric patterns in Islamic architecture avoid figurative representation, following religious tradition.",
+  "The qibla wall faces Mecca — the most sacred directional axis in Islamic floor plan design.",
+  "Muqarnas (honeycomb vaulting) is a signature decorative feature of Persian and Mughal architecture.",
+  "Mashrabiya (latticed screens) provide privacy and ventilation — a hallmark of Islamic residential design.",
+  "Hammam (bath) rooms are typically placed on the north or west in traditional Islamic plans.",
+  "The iwan (vaulted hall) opening onto the courtyard is a canonical element of Islamic domestic space.",
+];
+const FACTS_CHRISTIAN = [
+  "Early Christian basilicas were modelled on Roman civic halls, not pagan temples.",
+  "Sacred Christian architecture orients the altar towards the East — symbolising the risen sun.",
+  "Gothic cathedrals use flying buttresses to allow taller, thinner walls and larger stained glass windows.",
+  "The cruciform (cross-shaped) floor plan symbolises the crucifixion in many Christian church designs.",
+  "Baptisteries in early Christian architecture were often octagonal — symbolising resurrection on the 8th day.",
+  "Nave proportions in Romanesque churches often followed the musical ratios of Pythagorean harmony.",
+  "The narthex (entrance porch) served as a threshold zone for catechumens in early Christian buildings.",
+  "Clerestory windows above the nave flood the liturgical space with symbolic heavenly light.",
+];
+const FACTS_UNIVERSAL = [
+  "Universal Design follows 7 principles: equitable use, flexibility, simple operation, perceptible info, tolerance for error, low effort, and size/space.",
+  "ADA-compliant doorways require 32-inch clear width minimum — 36 inches is the preferred standard.",
+  "A 60-inch (5ft) turning radius is required for wheelchair accessibility in key activity spaces.",
+  "Step-free entrances benefit not just wheelchair users but parents with prams and delivery workers.",
+  "Contrast between wall and floor colours improves spatial orientation for visually impaired users.",
+  "Lever-style door handles require 75% less grip strength than round knobs — better for all ages.",
+  "Kitchen counters at two heights (34in and 36in) serve both seated and standing users equally.",
+  "Universal Design benefits 100% of users — not just those with disabilities.",
+];
+const FACTS_COMMON = [
+  "Claude's SVG renderer can describe floor plans with 300+ geometric primitives in a single pass.",
+  "A typical 30×40ft 3BHK generates ~140 rule checks before the first pixel is drawn.",
+  "Parallel AI inference can save up to 60% wall-clock time vs. sequential chained calls.",
+  "RAG (Retrieval-Augmented Generation) fetches real floor plan references to ground the AI's output.",
+  "The average Indian construction cost of ₹2,400/sqft covers civil work, wiring, and basic finishes.",
+  "NBC 2016 mandates a minimum 1.2m wide staircase and 2.1m headroom for residential buildings.",
+  "BBMP setback rules require 3ft on sides and 10ft at the front for plots under 2,400 sqft.",
+  "A 9-room layout can produce over 362,880 unique room arrangements — AI narrows it to the optimal few.",
+];
+function getFunFacts(belief) {
+  const specific = { vastu: FACTS_VASTU, islamic: FACTS_ISLAMIC, christian: FACTS_CHRISTIAN, universal: FACTS_UNIVERSAL }[belief] || FACTS_VASTU;
+  return [...specific, ...FACTS_COMMON];
+}
 
 // ─── Alternatives panel ───────────────────────────────────────────────────────
 function AltsPanel({ alts, selected, onSelect }) {
@@ -676,18 +739,20 @@ export default function App() {
   const progress = generating
     ? Math.min(97, Math.round(doneWeights + (runningId ? AGENT_WEIGHTS[runningId] * 0.5 : 0)))
     : 0;
-  const currentAgentLabel = runningId ? AGENT_LABELS[runningId] : 'Processing';
+  const agentLabels    = buildAgentLabels(params.belief);
+  const currentAgentLabel = runningId ? agentLabels[runningId] : 'Processing';
+  const funFacts = getFunFacts(params.belief);
 
   // ── Fun facts rotation ────────────────────────────────────────────────────
   const [factIndex, setFactIndex]   = useState(0);
   const [factVisible, setFactVisible] = useState(true);
   useEffect(() => {
     if (phase !== "generating") return;
-    setFactIndex(Math.floor(Math.random() * FUN_FACTS.length));
+    setFactIndex(Math.floor(Math.random() * funFacts.length));
     const id = setInterval(() => {
       setFactVisible(false);
       setTimeout(() => {
-        setFactIndex(i => (i + 1) % FUN_FACTS.length);
+        setFactIndex(i => (i + 1) % funFacts.length);
         setFactVisible(true);
       }, 400);
     }, 5000);
@@ -853,25 +918,32 @@ export default function App() {
       const lyt = computeLayout(params);
       setLayout(lyt);
       const vastuLayoutScore = scoreVastuLayout(lyt.rooms);
-      addLog(`Input Parser: ✓ ${lyt.rooms.length} rooms placed — layout Vastu score ${vastuLayoutScore.score}/100`);
+      addLog(`Input Parser: ✓ ${lyt.rooms.length} rooms placed — layout score ${vastuLayoutScore.score}/100`);
       setAgent("input", "done");
       setAgentScores(s => ({ ...s, input: 100 }));
 
       // ── Agent 2: Spatial Planner ─────────────────────────────────────────
       setAgent("spatial", "running");
-      addLog("Spatial Planner: computing Vastu-optimised room topology…");
+      const _bCtxEarly = buildBeliefContext(params.belief || 'vastu');
+      const _zoneLog = {
+        vastu:     'NE:Puja, SE:Kitchen, SW:MasterBed, NW:Bath/Toilet',
+        islamic:   'Qibla→East, Sahn→Center, Majlis→reception zone, Kitchen→SE',
+        christian: 'Altar→East, Nave→West-East axis, Font→West entry, Sacristy→SE',
+        universal: 'Social→accessible entry, Private→rear, Service→corridor-adjacent',
+      }[params.belief] || 'NE:Puja, SE:Kitchen, SW:MasterBed, NW:Bath/Toilet';
+      addLog(`Spatial Planner: computing ${_bCtxEarly.label}-optimised room topology…`);
       await new Promise(r => setTimeout(r, 300));
       const floorCheck = getMaxFloors(params);
       if (floorCheck.isExceeded) addLog(`⚠ Floor limit: ${floorCheck.message}`);
       else addLog(`Spatial Planner: ✓ ${floorCheck.message}`);
-      addLog(`Spatial Planner: ✓ zones assigned — NE:Puja, SE:Kitchen, SW:MasterBed, NW:Bath/Toilet`);
+      addLog(`Spatial Planner: ✓ zones assigned — ${_zoneLog}`);
       setAgent("spatial", "done");
       setAgentScores(s => ({ ...s, spatial: vastuLayoutScore.score }));
       setScores(sc => ({ ...sc, vastu: vastuLayoutScore.score }));
 
       // ── Agent 3: RAG Knowledge Retrieval ─────────────────────────────────
       setAgent("rag", "running");
-      addLog("RAG Retriever: fetching vastu reference layouts for this dimension…");
+      addLog(`RAG Retriever: fetching ${_bCtxEarly.label} reference layouts for this dimension…`);
       const ragResult = await fetchRAGContext(params);
       const ragContext = ragResult?.formattedContext || null;
       const ragSource  = ragResult?.source || "static";
@@ -1400,6 +1472,7 @@ function switchCanvas(tabId) {
   };
   const beliefRuleCount = { vastu:"14", islamic:"12", christian:"12", universal:"12" };
   const TABS = [
+    { id:"plan",    label:"Plan" },
     { id:"3d",      label:"3D View" },
     { id:"vastu",   label: beliefTabLabel[params.belief] || "Vastu" },
     { id:"cost",    label:"Cost" },
@@ -1522,7 +1595,7 @@ function switchCanvas(tabId) {
                 ── Did you know ──
               </div>
               <div style={{ fontSize:11, color:"#666", lineHeight:1.65, fontStyle:"italic" }}>
-                {FUN_FACTS[factIndex]}
+                {funFacts[factIndex % funFacts.length]}
               </div>
             </div>
           </div>
