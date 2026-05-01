@@ -1,5 +1,9 @@
 "use client";
 import { useState, useCallback, useRef, useEffect } from "react";
+import dynamic from "next/dynamic";
+const ThreeViewer = dynamic(() => import("../../components/ThreeViewer"), { ssr: false, loading: () => (
+  <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", background:"#080814", color:"#333", fontFamily:"monospace", fontSize:11 }}>Loading 3D…</div>
+) });
 import Sidebar       from "../../components/Sidebar";
 import FloorPlanWizard from "../../components/FloorPlanWizard";
 import ArchiLogo    from "../../components/ArchiLogo";
@@ -1396,6 +1400,7 @@ function switchCanvas(tabId) {
   };
   const beliefRuleCount = { vastu:"14", islamic:"12", christian:"12", universal:"12" };
   const TABS = [
+    { id:"3d",      label:"3D View" },
     { id:"vastu",   label: beliefTabLabel[params.belief] || "Vastu" },
     { id:"cost",    label:"Cost" },
     { id:"timeline",label:"Timeline" },
@@ -1817,6 +1822,11 @@ function switchCanvas(tabId) {
                 />
               )}
             </div>
+          )}
+
+          {/* 3D View */}
+          {tab==="3d" && (
+            <ThreeViewer layout={layout} params={params} />
           )}
 
           {/* Diff */}
